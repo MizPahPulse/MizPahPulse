@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, log};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, log, Address, Val, Vec};
 
 /// Counter for tracking pulse events
 #[contracttype]
@@ -11,6 +11,9 @@ pub struct PulseData {
 
 /// Key for storing pulse data in contract storage
 const PULSE_KEY: Symbol = symbol_short!("PULSE");
+
+/// Constants for cross-contract communication
+const PULSE_RECEIVER_TOPIC: Symbol = symbol_short!("receiver");
 
 #[contract]
 pub struct PulseContract;
@@ -67,6 +70,81 @@ impl PulseContract {
                 count: 0,
                 last_caller: None,
             })
+    }
+
+    /// ──────────────────────────────────────────────
+    /// Inter-contract communication: Broadcast pulse to another contract
+    /// ──────────────────────────────────────────────
+    ///
+    /// Calls another contract's `on_pulse_received` function, passing the
+    /// pulse count and caller symbol. This demonstrates cross-contract
+    /// invocation patterns essential for Soroban composability.
+    ///
+    /// @param target_contract - Address of the receiver contract
+    /// @param caller - Name of the caller for tracking
+    /// @returns (own_pulse_count, receiver_result) tuple
+    pub fn broadcast_pulse(env: Env, target_contract: Address, caller: Symbol) -> (u32, Val) {
+        // First, fire our own pulse
+        let own_count = Self::pulse(env.clone(), caller.clone());
+
+        // Then, invoke the target contract via inter-contract call
+        // This demonstrates cross-contract communication
+        let receiver_result: Val = env.invoke_contract(
+            &target_contract,
+            &symbol_short!("on_pulse_received"),
+            Vec::from_array(
+                &env,
+                [own_count.into_val(&env), caller.into_val(&env)],
+            ),
+        );
+
+        // Emit a cross-contract event for monitoring
+        env.events().publish(
+            (PULSE_RECEIVER_TOPIC, symbol_short!("broadcasted")),
+            (own_count, target_contract),
+        );
+
+        log!(
+            &env,
+            "Pulse #{} broadcasted to contract {}",
+            own_count,
+            target_contract
+        );
+
+        (own_count, receiver_result)
+    }
+
+    /// Receive a pulse from another PulseContract instance.
+    /// This is the receiver endpoint for inter-contract communication.
+    /// Stores the last received pulse data and emits an acknowledgment event.
+    pub fn on_pulse_received(env: Env, pulse_count: u32, origin_caller: Symbol) -> Symbol {
+        log!(
+            &env,
+            "Received pulse #{} from {}",
+            pulse_count,
+            origin_caller
+        );
+
+        // Store the last received pulse
+        env.storage().instance().set(
+            &symbol_short!("RX_PULSE"),
+            &(pulse_count, origin_caller.clone()),
+        );
+
+        // Emit acknowledgment event
+        env.events().publish(
+            (symbol_short!("receiver"), symbol_short!("ack")),
+            (pulse_count, origin_caller.clone()),
+        );
+
+        symbol_short!("ACK")
+    }
+
+    /// Get the last received pulse data from cross-contract communication
+    pub fn get_last_received(env: Env) -> Option<(u32, Symbol)> {
+        env.storage()
+            .instance()
+            .get::<Symbol, (u32, Symbol)>(&symbol_short!("RX_PULSE"))
     }
 }
 
