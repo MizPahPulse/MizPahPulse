@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import freighterApi from '@stellar/freighter-api';
 
 /**
  * Freighter wallet connection states
@@ -28,7 +29,12 @@ export function useFreighter() {
    */
   const isFreighterInstalled = useCallback((): boolean => {
     if (typeof window === 'undefined') return false;
-    return !!(window as unknown as Record<string, unknown>).freighterApi;
+    try {
+      // @stellar/freighter-api throws if not installed
+      return freighterApi !== undefined;
+    } catch {
+      return false;
+    }
   }, []);
 
   /**
@@ -46,12 +52,9 @@ export function useFreighter() {
     // Check if already connected (e.g. page refresh)
     const checkExistingConnection = async () => {
       try {
-        const freighter = (window as unknown as Record<string, unknown>).freighterApi as FreighterApi;
-        if (!freighter) return;
-
-        const isConnected = await freighter.isConnected();
+        const isConnected = await freighterApi.isConnected();
         if (isConnected) {
-          const pk = await freighter.getPublicKey();
+          const pk = await freighterApi.getPublicKey();
           setPublicKey(pk);
           setState('connected');
         }
@@ -83,19 +86,19 @@ export function useFreighter() {
         return null;
       }
 
-      const freighter = (window as unknown as Record<string, unknown>).freighterApi as FreighterApi;
-
       // Check if already connected
-      const alreadyConnected = await freighter.isConnected();
+      const alreadyConnected = await freighterApi.isConnected();
       if (alreadyConnected) {
-        const pk = await freighter.getPublicKey();
+        const pk = await freighterApi.getPublicKey();
         setPublicKey(pk);
         setState('connected');
         return pk;
       }
 
       // Request access — this triggers the Freighter popup
-      const pk = await freighter.requestAccess();
+      // In @stellar/freighter-api v3, requestAccess() returns { address: string }
+      const result = await freighterApi.requestAccess();
+      const pk = typeof result === 'string' ? result : (result as { address: string }).address;
       setPublicKey(pk);
       setState('connected');
       return pk;
@@ -123,8 +126,7 @@ export function useFreighter() {
     if (!isFreighterInstalled()) return null;
 
     try {
-      const freighter = (window as unknown as Record<string, unknown>).freighterApi as FreighterApi;
-      const pk = await freighter.getPublicKey();
+      const pk = await freighterApi.getPublicKey();
       setPublicKey(pk);
       setState('connected');
       return pk;
@@ -144,16 +146,4 @@ export function useFreighter() {
     error,
     isFreighterInstalled: isFreighterInstalled(),
   };
-}
-
-/**
- * Freighter API interface for type safety
- */
-interface FreighterApi {
-  isConnected: () => Promise<boolean>;
-  getPublicKey: () => Promise<string>;
-  requestAccess: () => Promise<string>;
-  signTransaction: (xdr: string, opts?: { network?: string; networkPassphrase?: string }) => Promise<string>;
-  signAuthEntry: (entryXdr: string, opts?: { accountToSign?: string }) => Promise<string>;
-  getNetwork: () => Promise<string>;
 }
