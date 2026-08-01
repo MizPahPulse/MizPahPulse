@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "contracts/pulse",
+    "pulse",
 ]
 
 [workspace.dependencies]
