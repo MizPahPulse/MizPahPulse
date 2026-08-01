@@ -1,0 +1,13 @@
+# ─── Builder Stage ───
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json turbo.json tsconfig.base.json ./
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+
+RUN npm ci
+RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+CMD ["npx", "turbo", "run", "dev", "--filter=@mizpah-pulse/web"]
