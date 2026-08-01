@@ -25,16 +25,13 @@ export function useFreighter() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Check if Freighter extension is installed
+   * Check if Freighter extension is installed in the browser.
+   * We check window.freighterApi because the npm package always resolves
+   * at build time regardless of whether the browser extension exists.
    */
   const isFreighterInstalled = useCallback((): boolean => {
     if (typeof window === 'undefined') return false;
-    try {
-      // @stellar/freighter-api throws if not installed
-      return freighterApi !== undefined;
-    } catch {
-      return false;
-    }
+    return !!(window as unknown as Record<string, unknown>).freighterApi;
   }, []);
 
   /**
