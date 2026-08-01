@@ -1,0 +1,228 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// Blockchain Event (core entity)
+// ──────────────────────────────────────────────
+model Event {
+  id               String   @id @default(cuid())
+  eventType        String
+  source           String
+  category         String   @default("UNKNOWN")
+  severity         String   @default("INFO")
+  transactionHash  String
+  ledgerSequence   BigInt
+  pagingToken      String   @unique
+  timestamp        DateTime
+  accountId        String?
+  contractId       String?
+  assetCode        String?
+  assetIssuer      String?
+  amount           String?
+  payload          Json     @default("{}")
+
+  // Relations
+  transaction   Transaction?  @relation(fields: [transactionHash], references: [hash])
+  monitoredBy   MonitoredEvent[]
+
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventType])
+  @@index([category])
+  @@index([accountId])
+  @@index([contractId])
+  @@index([assetCode, assetIssuer])
+  @@index([timestamp])
+  @@index([transactionHash])
+  @@index([ledgerSequence])
+  @@index([pagingToken])
+}
+
+// ──────────────────────────────────────────────
+// Stellar Transaction
+// ──────────────────────────────────────────────
+model Transaction {
+  hash            String   @id
+  sourceAccount   String
+  fee             String
+  operationCount  Int
+  memo            String?
+  memoType        String?
+  successful      Boolean  @default(true)
+  resultCode      String?
+  ledgerSequence  BigInt
+  createdAt       DateTime
+  envelopeXdr     String?
+  resultXdr       String?
+  signatures      Json     @default("[]")
+
+  events Event[]
+
+  @@index([sourceAccount])
+  @@index([ledgerSequence])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Monitored Wallets
+// ──────────────────────────────────────────────
+model MonitoredWallet {
+  id                  String   @id @default(cuid())
+  userId              String
+  publicKey           String
+  label               String?
+  network             String   @default("TESTNET")
+  isActive            Boolean  @default(true)
+  notificationEnabled Boolean  @default(true)
+  tags                Json     @default("[]")
+  lastSyncedAt        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  userIdPublicKey UserIdPublicKey @unique([userId, publicKey])
+  apiKeys         ApiKey[]
+
+  @@index([userId])
+  @@index([publicKey])
+}
+
+// ──────────────────────────────────────────────
+// Monitored Events (links wallets to events)
+// ──────────────────────────────────────────────
+model MonitoredEvent {
+  id        String   @id @default(cuid())
+  walletId  String
+  eventId   String
+  createdAt DateTime @default(now())
+
+  wallet MonitoredWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  event  Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, eventId])
+  @@index([walletId])
+  @@index([eventId])
+}
+
+// ──────────────────────────────────────────────
+// API Keys
+// ──────────────────────────────────────────────
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  walletId    String?
+  key         String    @unique
+  name        String
+  permissions Json      @default("[\"read\"]")
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  wallet MonitoredWallet? @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([key])
+}
+
+// ──────────────────────────────────────────────
+// Webhook Subscriptions
+// ──────────────────────────────────────────────
+model WebhookSubscription {
+  id               String   @id @default(cuid())
+  userId           String
+  endpoint         String
+  secret           String
+  events           Json     @default("[]")
+  isActive         Boolean  @default(true)
+  maxRetries       Int      @default(3)
+  retryDelayMs     Int      @default(5000)
+  lastDeliveryAt   DateTime?
+  failedDeliveries Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([userId])
+  @@index([endpoint])
+}
+
+// ──────────────────────────────────────────────
+// Webhook Deliveries
+// ──────────────────────────────────────────────
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  eventId        String
+  status         String    @default("PENDING")
+  statusCode     Int?
+  attempt        Int       @default(1)
+  payload        Json      @default("{}")
+  response       String?
+  error          String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Stellar Asset Cache
+// ──────────────────────────────────────────────
+model Asset {
+  id     String @id @default(cuid())
+  code   String
+  issuer String?
+  type   String
+
+  @@unique([code, issuer])
+  @@index([code])
+}
+
+// ──────────────────────────────────────────────
+// Audit Log
+// ──────────────────────────────────────────────
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String
+  resourceId String?
+  details   Json     @default("{}")
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Notification Preferences
+// ──────────────────────────────────────────────
+model NotificationPreference {
+  id       String @id @default(cuid())
+  userId   String @unique
+  channels Json   @default("[\"websocket\"]")
+  events   Json   @default("[]")
+  enabled  Boolean @default(true)
+
+  @@index([userId])
+}
