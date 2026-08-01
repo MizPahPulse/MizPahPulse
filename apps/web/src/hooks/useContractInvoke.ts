@@ -148,29 +148,29 @@ export function useContractInvoke(contractId: string) {
   );
 
   /**
-   * Read-only call: invoke without submitting (simulate only)
+   * Read-only call: invoke without submitting (simulate only).
+   * Requires wallet connection to load source account for simulation.
    */
   const readOnly = useCallback(
     async (functionName: string): Promise<unknown> => {
+      if (!publicKey) return null;
+
       try {
         const rpc = new SorobanRpc.Server('https://soroban-rpc.testnet.stellar.org');
+        const horizon = new HorizonServer('https://horizon-testnet.stellar.org');
         const contract = new Contract(contractId);
 
-        const sourceAccount = publicKey
-          ? new Address(publicKey).toScAddress()
-          : undefined;
+        const sourceAccount = await horizon.loadAccount(publicKey);
 
-        const simResponse = await rpc.simulateTransaction(
-          new TransactionBuilder(
-            await new HorizonServer('https://horizon-testnet.stellar.org').loadAccount(
-              publicKey || 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNM2K26MDOOF5FSH4Q3GC6I7RQ7HVE',
-            ),
-            { fee: BASE_FEE, networkPassphrase: Networks.TESTNET },
-          )
-            .addOperation(contract.call(functionName))
-            .setTimeout(30)
-            .build(),
-        );
+        const tx = new TransactionBuilder(sourceAccount, {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(contract.call(functionName))
+          .setTimeout(30)
+          .build();
+
+        const simResponse = await rpc.simulateTransaction(tx);
 
         if (SorobanRpc.Api.isSimulationError(simResponse)) {
           return null;
