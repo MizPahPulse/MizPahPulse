@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # ──────────────────────────────────────
+  # PostgreSQL Database
+  # ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: mizpah-pulse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mizpah_pulse
+      POSTGRES_USER: mizpah
+      POSTGRES_PASSWORD: mizpah_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mizpah -d mizpah_pulse']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # Redis (Queue + Pub/Sub)
+  # ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: mizpah-pulse-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # Next.js Web App (with API)
+  # ──────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runner
+    container_name: mizpah-pulse-web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgresql://mizpah:mizpah_dev@postgres:5432/mizpah_pulse
+      - REDIS_URL=redis://redis:6379
+      - STELLAR_NETWORK=TESTNET
+      - NODE_ENV=production
+      - WS_URL=http://ws:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ──────────────────────────────────────
+  # WebSocket Server
+  # ──────────────────────────────────────
+  ws:
+    build:
+      context: .
+      dockerfile: apps/ws/Dockerfile
+      target: runner
+    container_name: mizpah-pulse-ws
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ──────────────────────────────────────
+  # Event Ingestion Worker
+  # ──────────────────────────────────────
+  ingester:
+    build:
+      context: .
+      dockerfile: apps/ingester/Dockerfile
+      target: runner
+    container_name: mizpah-pulse-ingester
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://mizpah:mizpah_dev@postgres:5432/mizpah_pulse
+      - REDIS_URL=redis://redis:6379
+      - STELLAR_NETWORK=TESTNET
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
