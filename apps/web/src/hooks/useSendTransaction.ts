@@ -10,6 +10,7 @@ import {
   Memo,
   Server as HorizonServer,
 } from '@stellar/stellar-sdk';
+import freighterApi from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
 
 /**
@@ -108,19 +109,7 @@ export function useSendTransaction() {
         // Step 2: Sign with Freighter
         setState('signing');
 
-        if (typeof window === 'undefined') {
-          throw new Error('Cannot sign transactions in server-side rendering.');
-        }
-
-        const freighter = (window as unknown as Record<string, unknown>).freighterApi as {
-          signTransaction: (xdr: string, opts?: { network?: string; networkPassphrase?: string }) => Promise<string>;
-        };
-
-        if (!freighter) {
-          throw new Error('Freighter wallet not found. Please install the Freighter extension.');
-        }
-
-        const signedXdr = await freighter.signTransaction(tx.toXDR(), {
+        const signedXdr = await freighterApi.signTransaction(tx.toXDR(), {
           network: 'TESTNET',
           networkPassphrase: Networks.TESTNET,
         });
