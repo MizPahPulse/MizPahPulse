@@ -3,7 +3,7 @@
 import React, { useState, type FormEvent } from 'react';
 import { useSendTransaction } from '@/hooks/useSendTransaction';
 import { useWallet } from '@/context/WalletContext';
-import { Spinner, cn } from '@mizpah-pulse/ui';
+import { cn } from '@mizpah-pulse/ui';
 import {
   Send,
   X,
