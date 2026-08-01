@@ -45,7 +45,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json({
       success: true,
       data: {
-        events: data.map((e) => ({
+        events: data.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
           ...e,
           ledgerSequence: e.ledgerSequence.toString(),
         })),

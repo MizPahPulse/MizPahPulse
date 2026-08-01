@@ -109,9 +109,8 @@ export function useSendTransaction() {
         // Step 2: Sign with Freighter
         setState('signing');
 
-        const signedXdr = await signTransaction(tx.toXDR(), {
-          network: 'TESTNET' as const,
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const signedXdr = await signTransaction(tx.toXDR(), { network: 'TESTNET' } as any);
 
         // Step 3: Submit to network
         setState('submitting');

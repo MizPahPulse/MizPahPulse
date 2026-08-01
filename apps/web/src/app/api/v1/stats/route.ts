@@ -29,15 +29,15 @@ export async function GET() {
           by: ['accountId'],
           where: { timestamp: { gte: twentyFourHoursAgo }, accountId: { not: null } },
           _count: true,
-        }).then((r) => r.length),
+        }).then((r: { count: number }[]) => r.length),
         prisma.event.groupBy({
           by: ['contractId'],
           where: { timestamp: { gte: twentyFourHoursAgo }, contractId: { not: null } },
           _count: true,
-        }).then((r) => r.length),
+        }).then((r: { count: number }[]) => r.length),
       ]);
 
-    const categories = categoryBreakdown.reduce<Record<string, number>>((acc, c) => {
+    const categories = categoryBreakdown.reduce((acc: Record<string, number>, c: { category: string; _count: number }) => {
       acc[c.category] = c._count;
       return acc;
     }, {});

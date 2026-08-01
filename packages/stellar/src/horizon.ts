@@ -113,7 +113,7 @@ export function streamHorizonEvents(
 
   const close = builder.stream({
     onmessage: (tx) => onEvent(tx),
-    onerror: (err) => onError?.(err as Error),
+    onerror: (err) => onError?.(err as unknown as Error),
   });
 
   return close;

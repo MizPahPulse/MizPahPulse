@@ -106,9 +106,8 @@ export function useContractInvoke(contractId: string) {
         // Sign with Freighter
         setState('signing');
 
-        const signedXdr = await signTransaction(assembledTx.toXDR(), {
-          network: 'TESTNET' as const,
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const signedXdr = await signTransaction(assembledTx.toXDR(), { network: 'TESTNET' } as any);
 
         // Submit to network
         setState('submitting');

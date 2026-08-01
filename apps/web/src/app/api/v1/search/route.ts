@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       results.accounts = [{
         publicKey: q,
         eventCount: txCount,
-        recentEvents: accountEvents.map((e) => ({
+        recentEvents: accountEvents.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
           ...e,
           ledgerSequence: e.ledgerSequence.toString(),
         })),
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     });
 
     if (textMatches.length > 0) {
-      results.events = textMatches.map((e) => ({
+      results.events = textMatches.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
         ...e,
         ledgerSequence: e.ledgerSequence.toString(),
       }));

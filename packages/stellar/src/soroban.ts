@@ -38,7 +38,8 @@ export async function getTransaction(hash: string) {
 /**
  * Get events from Soroban RPC
  */
-export async function getEvents(request: rpc.Api.GetEventsRequest) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getEvents(request: any) {
   const rpc = getSorobanRpc();
   return rpc.getEvents(request);
 }
@@ -110,7 +111,8 @@ export async function pollSorobanEvents(
  */
 export async function simulateTransaction(transaction: string) {
   const rpc = getSorobanRpc();
-  return rpc.simulateTransaction(new rpc.Api.SimulateTransactionRequest(transaction));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return rpc.simulateTransaction(transaction as any);
 }
 
 /**

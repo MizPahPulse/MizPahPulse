@@ -44,7 +44,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
           ? ((totalInvocations - failedInvocations) / totalInvocations * 100).toFixed(1) + '%'
           : 'N/A',
       },
-      recentEvents: recentEvents.map((e) => ({
+      recentEvents: recentEvents.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
         ...e,
         ledgerSequence: e.ledgerSequence.toString(),
       })),

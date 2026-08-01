@@ -59,8 +59,8 @@ export async function GET() {
           // If DB is unavailable, stream mock data
           for (const mock of MOCK_EVENT_DATA) {
             sendEvent({
-              type: 'event',
               ...mock,
+              type: 'event',
               timestamp: new Date().toISOString(),
               sequence: seq++,
             });

@@ -47,8 +47,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
         ? {
             sequence: stellarAccount.sequence,
             balances: stellarAccount.balances.map((b) => ({
-              assetCode: b.asset_code || 'XLM',
-              assetIssuer: b.asset_issuer || undefined,
+              assetCode: (b as unknown as Record<string, unknown>).asset_code || 'XLM',
+              assetIssuer: (b as unknown as Record<string, unknown>).asset_issuer || undefined,
               balance: b.balance,
             })),
             signers: stellarAccount.signers.map((s) => ({
@@ -67,7 +67,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         paymentsReceived,
         contractInteractions,
       },
-      recentEvents: recentEvents.map((e) => ({
+      recentEvents: recentEvents.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
         ...e,
         ledgerSequence: e.ledgerSequence.toString(),
       })),

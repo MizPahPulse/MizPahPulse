@@ -29,7 +29,7 @@ async function GET(request: Request) {
 
   return NextResponse.json({
     success: true,
-    data: webhooks.map((w) => ({
+    data: webhooks.map((w: { events: unknown; [key: string]: unknown }) => ({
       ...w,
       events: JSON.parse(w.events as string),
     })),
