@@ -2,11 +2,11 @@
  * Deploy the PulseContract Soroban smart contract to Stellar Testnet.
  *
  * Prerequisites:
- *   1. Build the contract: `cargo build --target wasm32-unknown-unknown --release`
+ *   1. Build the contract: `cd contracts && cargo build --target wasm32-unknown-unknown --release`
  *   2. Set DEPLOYER_SECRET in .env (a funded Testnet account secret key)
  *
  * Usage:
- *   npx tsx scripts/deploy-contract.ts
+ *   DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
  */
 
 import {
@@ -18,7 +18,6 @@ import {
   BASE_FEE,
   Server as HorizonServer,
   SorobanRpc,
-  Contract,
   xdr,
 } from '@stellar/stellar-sdk';
 import { readFileSync } from 'fs';
@@ -78,18 +77,36 @@ async function deployContract() {
     console.log('⏳ Waiting for upload confirmation...');
     await new Promise((r) => setTimeout(r, 5000));
 
-    // Simulate the create contract operation to get the contract ID
-    const contract = new Contract(wasmBuffer.toString('base64'));
-    
-    console.log('📝 To instantiate the contract, use the Soroban CLI or a separate create_contract operation.');
-    console.log('   WASM hash can be found in the upload transaction result on Stellar Expert.');
-    console.log(`🔗 View upload: https://stellar.expert/explorer/testnet/tx/${uploadResult.hash}`);
-    console.log('');
-    console.log('   Or deploy via Soroban CLI:');
-    console.log('   soroban contract deploy \\');
-    console.log('     --wasm contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm \\');
-    console.log(`     --source ${deployerSecret.slice(0, 8)}... \\`);
-    console.log('     --network testnet');
+    // Deploy the contract by creating a contract instance
+    // Build a create contract operation using the WASM hash from the upload
+    console.log('⏳ Instantiating contract from uploaded WASM...');
+
+    // Extract wasmId from the upload result
+    const wasmId = uploadResult.hash;
+    console.log(`   WASM ID: ${wasmId}`);
+
+    // Reload account for the next transaction
+    const updatedAccount = await horizon.loadAccount(deployerPubKey);
+
+    // Create the contract
+    const createTx = new TransactionBuilder(updatedAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        Operation.invokeHostFunction({
+          func: xdr.HostFunction.hostFunctionTypeCreateContract(
+            xdr.ContractExecutable.contractExecutableWasm(wasmBuffer),
+          ),
+          auth: [],
+        }),
+      )
+      .setTimeout(60)
+      .build();
+
+    createTx.sign(deployerKeypair);
+    const deployResult = await horizon.submitTransaction(createTx);
+    console.log(`✅ Contract deployed: ${deployResult.hash}`);
   } catch (err) {
     console.error('❌ Deployment failed:', err instanceof Error ? err.message : err);
     process.exit(1);
