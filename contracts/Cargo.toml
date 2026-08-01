@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "contracts/pulse",
+]
+
+[workspace.dependencies]
+soroban-sdk = "21.0.1"
+
+[workspace.metadata]
+stellar-network = "testnet"
