@@ -1,0 +1,131 @@
+name: MizpahPulse CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '22'
+  DATABASE_URL: 'postgresql://test:test@localhost:5432/test'
+
+jobs:
+  # ──────────────────────────────────────
+  # Lint & Typecheck
+  # ──────────────────────────────────────
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npx turbo run lint
+
+      - name: Typecheck
+        run: npx turbo run typecheck
+
+  # ──────────────────────────────────────
+  # Test
+  # ──────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy --schema=packages/database/prisma/schema.prisma
+
+      - name: Run tests
+        run: npx turbo run test
+
+  # ──────────────────────────────────────
+  # Build
+  # ──────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Build all apps
+        run: npx turbo run build
+
+  # ──────────────────────────────────────
+  # Docker Build (main only)
+  # ──────────────────────────────────────
+  docker:
+    name: Docker Build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test, build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker images
+        run: docker compose build
