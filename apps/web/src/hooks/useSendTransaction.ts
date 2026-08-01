@@ -7,6 +7,7 @@ import {
   Asset,
   Operation,
   BASE_FEE,
+  Memo,
   Server as HorizonServer,
 } from '@stellar/stellar-sdk';
 import { useWallet } from '@/context/WalletContext';
@@ -32,7 +33,7 @@ export interface TransactionResult {
  * useSendTransaction — Hook for sending XLM transactions via Freighter wallet on Stellar Testnet
  *
  * Flow:
- * 1. Build transaction (Horizon account load + fee bump)
+ * 1. Build transaction (Horizon account load + operations + memo)
  * 2. Sign with Freighter (triggers wallet popup)
  * 3. Submit to Stellar Testnet
  * 4. Return transaction hash and explorer link on success
@@ -75,11 +76,6 @@ export function useSendTransaction() {
           throw new Error('Invalid amount. Must be a positive number.');
         }
 
-        // Minimum XLM reserve check (1 XLM base reserve + 0.5 XLM per trustline etc)
-        if (parsedAmount < 1.0) {
-          throw new Error('Minimum send amount is 1 XLM');
-        }
-
         // Step 1: Build the transaction
         const horizonUrl = 'https://horizon-testnet.stellar.org';
         const horizon = new HorizonServer(horizonUrl);
@@ -94,17 +90,27 @@ export function useSendTransaction() {
           amount: parsedAmount.toString(),
         });
 
-        // Build the transaction
-        const tx = new TransactionBuilder(sourceAccount, {
+        // Build the transaction with optional memo (memo MUST be added before building)
+        let txBuilder = new TransactionBuilder(sourceAccount, {
           fee: BASE_FEE,
           networkPassphrase: Networks.TESTNET,
         })
           .addOperation(paymentOp)
-          .setTimeout(30) // 30-second timeout
-          .build();
+          .setTimeout(30); // 30-second timeout
+
+        // Add memo BEFORE building — this is critical for the memo to be included
+        if (memo && memo.length > 0) {
+          txBuilder = txBuilder.addMemo(new Memo(Memo.text, memo.slice(0, 28)));
+        }
+
+        const tx = txBuilder.build();
 
         // Step 2: Sign with Freighter
         setState('signing');
+
+        if (typeof window === 'undefined') {
+          throw new Error('Cannot sign transactions in server-side rendering.');
+        }
 
         const freighter = (window as unknown as Record<string, unknown>).freighterApi as {
           signTransaction: (xdr: string, opts?: { network?: string; networkPassphrase?: string }) => Promise<string>;
@@ -112,10 +118,6 @@ export function useSendTransaction() {
 
         if (!freighter) {
           throw new Error('Freighter wallet not found. Please install the Freighter extension.');
-        }
-
-        if (memo && memo.length > 0) {
-          tx.addMemo(await import('@stellar/stellar-sdk').then((m) => new m.Memo.text(memo.slice(0, 28))));
         }
 
         const signedXdr = await freighter.signTransaction(tx.toXDR(), {
