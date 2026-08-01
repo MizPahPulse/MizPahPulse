@@ -15,9 +15,8 @@ interface ContractActivity {
   status: 'active' | 'error' | 'idle';
 }
 
-// Deployed PulseContract ID on Stellar Testnet
-// Update this after deploying the contract via scripts/deploy-contract.ts
-const DEPLOYED_CONTRACT_ID = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+// PulseContract ID — set via NEXT_PUBLIC_PULSE_CONTRACT_ID env var after deployment
+const DEPLOYED_CONTRACT_ID = process.env.NEXT_PUBLIC_PULSE_CONTRACT_ID || 'PASTE_YOUR_DEPLOYED_CONTRACT_ID_HERE';
 
 const mockContracts: ContractActivity[] = [
   { id: 'pulse', contractId: DEPLOYED_CONTRACT_ID, name: 'PulseContract (Deployed)', invocations: 0, lastCalled: '—', status: 'active' },
