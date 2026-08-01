@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import freighterApi from '@stellar/freighter-api';
+import { isConnected, requestAccess, getAddress } from '@stellar/freighter-api';
 
 /**
  * Freighter wallet connection states
@@ -49,9 +49,9 @@ export function useFreighter() {
     // Check if already connected (e.g. page refresh)
     const checkExistingConnection = async () => {
       try {
-        const isConnected = await freighterApi.isConnected();
-        if (isConnected) {
-          const pk = await freighterApi.getPublicKey();
+        const connected = await isConnected();
+        if (connected) {
+          const pk = (await getAddress()).address;
           setPublicKey(pk);
           setState('connected');
         }
@@ -84,9 +84,9 @@ export function useFreighter() {
       }
 
       // Check if already connected
-      const alreadyConnected = await freighterApi.isConnected();
+      const alreadyConnected = await isConnected();
       if (alreadyConnected) {
-        const pk = await freighterApi.getPublicKey();
+        const pk = (await getAddress()).address;
         setPublicKey(pk);
         setState('connected');
         return pk;
@@ -94,8 +94,8 @@ export function useFreighter() {
 
       // Request access — this triggers the Freighter popup
       // In @stellar/freighter-api v3, requestAccess() returns { address: string }
-      const result = await freighterApi.requestAccess();
-      const pk = typeof result === 'string' ? result : (result as { address: string }).address;
+      const result = await requestAccess();
+      const pk = result.address;
       setPublicKey(pk);
       setState('connected');
       return pk;
@@ -123,7 +123,7 @@ export function useFreighter() {
     if (!isFreighterInstalled()) return null;
 
     try {
-      const pk = await freighterApi.getPublicKey();
+      const pk = (await getAddress()).address;
       setPublicKey(pk);
       setState('connected');
       return pk;

@@ -10,17 +10,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useFreighter } from '@/hooks/useFreighter';
 
-// Mock @stellar/freighter-api
+// Mock @stellar/freighter-api with named exports
+const mockIsConnected = vi.fn();
+const mockGetAddress = vi.fn();
+const mockRequestAccess = vi.fn();
+
 vi.mock('@stellar/freighter-api', () => ({
-  default: {
-    isConnected: vi.fn(),
-    getPublicKey: vi.fn(),
-    requestAccess: vi.fn(),
-    signTransaction: vi.fn(),
-  },
+  isConnected: (...args: any[]) => mockIsConnected(...args),
+  getAddress: (...args: any[]) => mockGetAddress(...args),
+  requestAccess: (...args: any[]) => mockRequestAccess(...args),
+  signTransaction: vi.fn(),
 }));
 
-import freighterApi from '@stellar/freighter-api';
+import { isConnected, requestAccess, getAddress } from '@stellar/freighter-api';
 
 describe('useFreighter', () => {
   beforeEach(() => {
@@ -29,10 +31,10 @@ describe('useFreighter', () => {
     delete (window as any).freighterApi;
   });
 
-  it('should start with idle state and no public key', () => {
+  it('should start with disconnected state and no public key (Freighter not installed)', () => {
     const { result } = renderHook(() => useFreighter());
 
-    expect(result.current.state).toBe('idle');
+    expect(result.current.state).toBe('disconnected');
     expect(result.current.publicKey).toBeNull();
     expect(result.current.isConnected).toBe(false);
     expect(result.current.error).toBeNull();
@@ -69,8 +71,8 @@ describe('useFreighter', () => {
   it('should connect successfully when Freighter is installed', async () => {
     const mockPublicKey = 'GABCXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVW';
     (window as any).freighterApi = { isConnected: vi.fn(), requestAccess: vi.fn() };
-    (freighterApi.isConnected as any).mockResolvedValue(false);
-    (freighterApi.requestAccess as any).mockResolvedValue(mockPublicKey);
+    (mockIsConnected as any).mockResolvedValue(false);
+    (mockRequestAccess as any).mockResolvedValue({ address: mockPublicKey });
 
     const { result } = renderHook(() => useFreighter());
 

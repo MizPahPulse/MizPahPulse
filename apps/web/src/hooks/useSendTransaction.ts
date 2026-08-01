@@ -8,9 +8,9 @@ import {
   Operation,
   BASE_FEE,
   Memo,
-  Server as HorizonServer,
+  Horizon,
 } from '@stellar/stellar-sdk';
-import freighterApi from '@stellar/freighter-api';
+import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
 
 /**
@@ -79,7 +79,7 @@ export function useSendTransaction() {
 
         // Step 1: Build the transaction
         const horizonUrl = 'https://horizon-testnet.stellar.org';
-        const horizon = new HorizonServer(horizonUrl);
+        const horizon = new Horizon.Server(horizonUrl);
 
         // Load source account from Horizon
         const sourceAccount = await horizon.loadAccount(publicKey);
@@ -101,7 +101,7 @@ export function useSendTransaction() {
 
         // Add memo BEFORE building — this is critical for the memo to be included
         if (memo && memo.length > 0) {
-          txBuilder = txBuilder.addMemo(new Memo(Memo.text, memo.slice(0, 28)));
+          txBuilder = txBuilder.addMemo(Memo.text(memo.slice(0, 28)));
         }
 
         const tx = txBuilder.build();
@@ -109,15 +109,14 @@ export function useSendTransaction() {
         // Step 2: Sign with Freighter
         setState('signing');
 
-        const signedXdr = await freighterApi.signTransaction(tx.toXDR(), {
-          network: 'TESTNET',
-          networkPassphrase: Networks.TESTNET,
+        const signedXdr = await signTransaction(tx.toXDR(), {
+          network: 'TESTNET' as const,
         });
 
         // Step 3: Submit to network
         setState('submitting');
 
-        const signedTx = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET);
+        const signedTx = TransactionBuilder.fromXDR(signedXdr.signedTxXdr, Networks.TESTNET);
         const submitResult = await horizon.submitTransaction(signedTx);
 
         const txResult: TransactionResult = {

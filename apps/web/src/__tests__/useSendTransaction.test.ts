@@ -77,7 +77,7 @@ describe('useSendTransaction', () => {
 
   it('should validate amount is a positive number', async () => {
     (useWallet as any).mockReturnValue({
-      publicKey: 'GABCXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVW',
+      publicKey: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRS',
       isConnected: true,
     });
 
@@ -85,7 +85,7 @@ describe('useSendTransaction', () => {
 
     await act(async () => {
       const txResult = await result.current.sendXlm(
-        'GABCXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVW',
+        'GABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRS',
         '-5',
       );
       expect(txResult).toBeNull();

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Server as HorizonServer } from '@stellar/stellar-sdk';
+import { Horizon } from '@stellar/stellar-sdk';
 import { useWallet } from '@/context/WalletContext';
 import { Spinner, cn } from '@mizpah-pulse/ui';
 import { Coins, RefreshCw, AlertCircle } from 'lucide-react';
@@ -32,7 +32,7 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
     setError(null);
 
     try {
-      const horizon = new HorizonServer('https://horizon-testnet.stellar.org');
+      const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
       const account = await horizon.loadAccount(publicKey);
 
       // Find the native XLM balance

@@ -5,14 +5,13 @@ import {
   Networks,
   TransactionBuilder,
   BASE_FEE,
-  Server as HorizonServer,
-  SorobanRpc,
+  Horizon,
+  rpc,
   xdr,
-  Address,
   Contract,
   scValToNative,
 } from '@stellar/stellar-sdk';
-import freighterApi from '@stellar/freighter-api';
+import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
 
 /**
@@ -72,8 +71,8 @@ export function useContractInvoke(contractId: string) {
           throw new Error('INVALID_CONTRACT: The contract ID is invalid. Must start with "C" and be 56 characters.');
         }
 
-        const horizon = new HorizonServer('https://horizon-testnet.stellar.org');
-        const rpc = new SorobanRpc.Server('https://soroban-rpc.testnet.stellar.org');
+        const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
+        const sorobanRpc = new rpc.Server('https://soroban-rpc.testnet.stellar.org');
 
         // Load source account
         const sourceAccount = await horizon.loadAccount(publicKey);
@@ -95,27 +94,26 @@ export function useContractInvoke(contractId: string) {
           .build();
 
         // Simulate to get accurate fees and validate
-        const simResponse = await rpc.simulateTransaction(tx);
-        if (SorobanRpc.Api.isSimulationError(simResponse)) {
+        const simResponse = await sorobanRpc.simulateTransaction(tx);
+        if (rpc.Api.isSimulationError(simResponse)) {
           throw new Error(
             `CONTRACT_ERROR: Simulation failed — ${simResponse.error}`,
           );
         }
 
-        const assembledTx = SorobanRpc.assembleTransaction(tx, simResponse).build();
+        const assembledTx = rpc.assembleTransaction(tx, simResponse).build();
 
         // Sign with Freighter
         setState('signing');
 
-        const signedXdr = await freighterApi.signTransaction(assembledTx.toXDR(), {
-          network: 'TESTNET',
-          networkPassphrase: Networks.TESTNET,
+        const signedXdr = await signTransaction(assembledTx.toXDR(), {
+          network: 'TESTNET' as const,
         });
 
         // Submit to network
         setState('submitting');
 
-        const signedTx = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET);
+        const signedTx = TransactionBuilder.fromXDR(signedXdr.signedTxXdr, Networks.TESTNET);
         const submitResult = await horizon.submitTransaction(signedTx);
 
         // Extract return value if available from the simulation
@@ -156,8 +154,8 @@ export function useContractInvoke(contractId: string) {
       if (!publicKey) return null;
 
       try {
-        const rpc = new SorobanRpc.Server('https://soroban-rpc.testnet.stellar.org');
-        const horizon = new HorizonServer('https://horizon-testnet.stellar.org');
+        const sorobanRpc = new rpc.Server('https://soroban-rpc.testnet.stellar.org');
+        const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
         const contract = new Contract(contractId);
 
         const sourceAccount = await horizon.loadAccount(publicKey);
@@ -170,9 +168,9 @@ export function useContractInvoke(contractId: string) {
           .setTimeout(30)
           .build();
 
-        const simResponse = await rpc.simulateTransaction(tx);
+        const simResponse = await sorobanRpc.simulateTransaction(tx);
 
-        if (SorobanRpc.Api.isSimulationError(simResponse)) {
+        if (rpc.Api.isSimulationError(simResponse)) {
           return null;
         }
 

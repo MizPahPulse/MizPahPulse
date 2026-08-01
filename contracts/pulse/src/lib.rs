@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, log, Address, Val, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, log, Address, Val, Vec, IntoVal};
 
 /// Counter for tracking pulse events
 #[contracttype]
@@ -91,17 +91,17 @@ impl PulseContract {
         // This demonstrates cross-contract communication
         let receiver_result: Val = env.invoke_contract(
             &target_contract,
-            &symbol_short!("on_pulse_received"),
+            &Symbol::new(&env, "on_pulse_received"),
             Vec::from_array(
                 &env,
                 [own_count.into_val(&env), caller.into_val(&env)],
             ),
         );
 
-        // Emit a cross-contract event for monitoring
+        // Emit a cross-contract event for monitoring (clone since target_contract is used in log below)
         env.events().publish(
-            (PULSE_RECEIVER_TOPIC, symbol_short!("broadcasted")),
-            (own_count, target_contract),
+            (PULSE_RECEIVER_TOPIC, Symbol::new(&env, "broadcast")),
+            (own_count, target_contract.clone()),
         );
 
         log!(

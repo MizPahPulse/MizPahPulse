@@ -1,18 +1,18 @@
-import { SorobanRpc, xdr, Contract, Address } from '@stellar/stellar-sdk';
+import { rpc, xdr, Contract, Address } from '@stellar/stellar-sdk';
 import { getNetworkConfig } from './config';
 import type { StellarNetwork } from '@mizpah-pulse/types';
 
 /**
  * Create a Soroban RPC client
  */
-export function createSorobanRpc(network?: StellarNetwork): SorobanRpc.Server {
+export function createSorobanRpc(network?: StellarNetwork): rpc.Server {
   const config = getNetworkConfig(network);
-  return new SorobanRpc.Server(config.sorobanRpcUrl);
+  return new rpc.Server(config.sorobanRpcUrl);
 }
 
-let _defaultRpc: SorobanRpc.Server | null = null;
+let _defaultRpc: rpc.Server | null = null;
 
-export function getSorobanRpc(): SorobanRpc.Server {
+export function getSorobanRpc(): rpc.Server {
   if (!_defaultRpc) {
     _defaultRpc = createSorobanRpc();
   }
@@ -38,7 +38,7 @@ export async function getTransaction(hash: string) {
 /**
  * Get events from Soroban RPC
  */
-export async function getEvents(request: SorobanRpc.Api.GetEventsRequest) {
+export async function getEvents(request: rpc.Api.GetEventsRequest) {
   const rpc = getSorobanRpc();
   return rpc.getEvents(request);
 }
@@ -48,7 +48,7 @@ export async function getEvents(request: SorobanRpc.Api.GetEventsRequest) {
  */
 export async function pollSorobanEvents(
   startLedger: number,
-  onEvents: (events: SorobanRpc.Api.GetEventsResponse) => void,
+  onEvents: (events: rpc.Api.GetEventsResponse) => void,
   options?: {
     intervalMs?: number;
     contractIds?: string[];
@@ -110,7 +110,7 @@ export async function pollSorobanEvents(
  */
 export async function simulateTransaction(transaction: string) {
   const rpc = getSorobanRpc();
-  return rpc.simulateTransaction(new SorobanRpc.Api.SimulateTransactionRequest(transaction));
+  return rpc.simulateTransaction(new rpc.Api.SimulateTransactionRequest(transaction));
 }
 
 /**

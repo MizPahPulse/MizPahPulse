@@ -2,6 +2,7 @@
   "name": "mizpah-pulse",
   "private": true,
   "description": "Real-time blockchain intelligence platform for the Stellar ecosystem",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
