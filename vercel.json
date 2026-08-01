@@ -3,14 +3,7 @@
   "version": 2,
   "buildCommand": "npx prisma generate --schema=packages/database/prisma/schema.prisma && npx turbo run build --filter=@mizpah-pulse/web",
   "installCommand": "npm install",
-  "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
-  "rewrites": [
-    {
-      "source": "/api/v1/:path*",
-      "destination": "/api/v1/:path*"
-    }
-  ],
   "env": {
     "NEXT_PUBLIC_STELLAR_NETWORK": "TESTNET",
     "NEXT_PUBLIC_PULSE_CONTRACT_ID": "@pulse-contract-id"
