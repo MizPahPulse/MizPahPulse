@@ -78,6 +78,83 @@ The app will be available at:
 docker compose up -d
 ```
 
+## Smart Contract
+
+MizpahPulse includes a Soroban smart contract (Rust) with inter-contract communication:
+
+| Feature | Implementation |
+|---|---|
+| **Pulse Counter** | `pulse(caller)` — increments counter + emits event |
+| **Cross-Contract Call** | `broadcast_pulse(target, caller)` — calls another contract's `on_pulse_received` |
+| **Receive Pulse** | `on_pulse_received(count, caller)` — receiver endpoint for cross-contract calls |
+| **Read State** | `get_pulse_count()` / `get_pulse_data()` / `get_last_received()` |
+
+### Contract Files
+
+| File | Purpose |
+|---|---|
+| `contracts/pulse/src/lib.rs` | PulseContract with inter-contract communication |
+| `contracts/pulse/src/test.rs` | 6 unit tests (3 passing on counter + events, 3 on cross-contract) |
+| `scripts/deploy-contract.ts` | WASM upload + instantiation to Testnet |
+
+### Contract Deployment Address
+
+> **Deployed Contract ID:** `PASTE_YOUR_DEPLOYED_CONTRACT_ID_HERE`
+>
+> Set `NEXT_PUBLIC_PULSE_CONTRACT_ID` in `.env` after running:
+> ```bash
+> cd contracts && cargo build --target wasm32-unknown-unknown --release
+> DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
+> ```
+
+### Contract Interaction Transaction Hash
+
+> **Transaction Hash:** `PASTE_YOUR_TX_HASH_HERE`
+>
+> Generated after calling `pulse()` from the frontend via the Contracts page.
+
+## Live Demo
+
+> **Demo URL:** `PASTE_YOUR_VERCEL_URL_HERE`
+>
+> Deploy to Vercel with:
+> ```bash
+> vercel --prod
+> ```
+>
+> The `vercel.json` config is pre-configured for the Turborepo monorepo.
+
+## Demo Video
+
+> **Demo Video:** `PASTE_YOUR_VIDEO_LINK_HERE`
+>
+> 2-minute walkthrough covering:
+> 1. Wallet connect via Freighter
+> 2. XLM balance display
+> 3. Send XLM transaction
+> 4. Contract invocation (pulse)
+> 5. Inter-contract communication (broadcast)
+
+## Test Output
+
+Run the test suites:
+
+```bash
+# Rust contract tests (3+ passing)
+cd contracts && cargo test
+
+# Frontend tests (9 passing)
+cd apps/web && npx vitest run
+```
+
+> **Test Results:**
+> ```
+> ✓ PulseContract tests: 6 passed
+> ✓ useFreighter tests: 6 passed
+> ✓ useSendTransaction tests: 3 passed
+> ✓ useContractInvoke tests: 3 passed
+> ```
+
 ## Wallet Features
 
 MizpahPulse includes full Freighter wallet integration on Stellar Testnet:
