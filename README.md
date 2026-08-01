@@ -100,37 +100,50 @@ MizpahPulse includes full Freighter wallet integration on Stellar Testnet:
 ## Screenshots
 
 ### 1. Wallet Connected State
-<!-- Add screenshot showing the wallets page with Freighter connected -->
-<!-- The UI shows: connection status ("Connected" with green dot), public key, -->
-<!-- "Testnet" network badge, Freighter "Installed" badge, and Send XLM / Disconnect buttons -->
-![Wallet Connected](./screenshots/wallet-connected.png)
+<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
+<!-- Use: ![Wallet Connected](./screenshots/wallet-connected.png) -->
+
+> **Expected UI:** Wallets page (`/dashboard/wallets`) with Freighter connected.
+> - Connection status: "Connected" with green pulsing dot
+> - Public key displayed (truncated format: `GABC...XYZ`)
+> - Network badge: "Testnet" with green indicator
+> - Freighter badge: "Installed"
+> - Action buttons: "Send XLM" and "Disconnect" visible
 
 ### 2. Balance Displayed
-<!-- Add screenshot showing the XLM balance card on the wallets page -->
-<!-- The UI shows: XLM Balance card with coin icon, formatted balance amount, -->
-<!-- "XLM" label, and a refresh button. Balance is fetched from Horizon Testnet -->
-![Balance Displayed](./screenshots/balance-displayed.png)
+<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
+<!-- Use: ![Balance Displayed](./screenshots/balance-displayed.png) -->
+
+> **Expected UI:** XLM Balance card on the wallets page.
+> - "XLM Balance" label with amber coin icon
+> - Formatted balance amount (e.g. "10,000 XLM")
+> - Refresh button with hover animation
+> - Balance fetched live from Horizon Testnet
 
 ### 3. Successful Testnet Transaction
-<!-- Add screenshot showing the Transaction Sent success state in the modal -->
-<!-- The UI shows: green checkmark, "Transaction Sent!" heading, amount sent, -->
-<!-- transaction hash (full hex string), ledger number, -->
-<!-- and "View on Explorer" button linking to stellar.expert -->
-![Successful Transaction](./screenshots/successful-transaction.png)
+<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
+<!-- Use: ![Successful Transaction](./screenshots/successful-transaction.png) -->
+
+> **Expected UI:** Transaction Sent success state in the send modal.
+> - Green checkmark icon in emerald circle
+> - "Transaction Sent!" heading
+> - Amount confirmation (e.g. "10 XLM sent successfully")
+> - Transaction Hash panel with full hex string
+> - Ledger number display
+> - "View on Explorer" button (opens Stellar Expert in new tab)
+> - "Done" button to close modal
 
 ### 4. Transaction Result Shown to User
-<!-- Add screenshot showing the transaction details panel after a successful send -->
-<!-- Alternative: show the Stellar Expert explorer page for the transaction -->
-<!-- The UI shows: full transaction hash, ledger #, explorer link -->
-![Transaction Result](./screenshots/transaction-result.png)
+<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
+<!-- Use: ![Transaction Result](./screenshots/transaction-result.png) -->
 
-> **Note:** Replace the placeholder images above with actual screenshots taken after:
-> 1. Connecting Freighter wallet (screenshot 1)
-> 2. Viewing the balance card (screenshot 2)
-> 3. Completing a successful XLM send (screenshot 3)
-> 4. Showing the transaction result with hash (screenshot 4)
->
-> Place screenshots in `./screenshots/` directory at the project root.
+> **Expected UI:** Transaction details visible to the user after completion.
+> - Full transaction hash displayed (break-all, monospace font)
+> - Ledger sequence number
+> - External link to `stellar.expert/explorer/testnet/tx/<hash>`
+> - User can copy the hash or click through to verify on-chain
+
+> **Adding screenshots:** Place PNG files in the `./screenshots/` directory, then replace each section's HTML comment with `![Label](./screenshots/filename.png)`.
 
 ## API Overview
 
