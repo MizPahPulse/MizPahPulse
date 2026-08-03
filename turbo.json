@@ -10,7 +10,10 @@
     "REDIS_URL",
     "JWT_SECRET",
     "API_KEY_SECRET",
-    "WEBHOOK_SECRET"
+    "WEBHOOK_SECRET",
+    "NEXT_PUBLIC_STELLAR_NETWORK",
+    "NEXT_PUBLIC_PULSE_CONTRACT_ID",
+    "NEXT_PUBLIC_WS_URL"
   ],
   "tasks": {
     "build": {
