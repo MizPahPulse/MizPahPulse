@@ -34,7 +34,6 @@
 - [CI/CD](#-cicd)
 - [Screenshots](#-screenshots)
 - [Environment Variables](#-environment-variables)
-- [Deployment](#-deployment)
 - [Credits](#-credits)
 - [License](#-license)
 
@@ -243,8 +242,7 @@ Full **Freighter wallet** integration on Stellar Testnet with comprehensive erro
 
 1. Install [Freighter](https://freighter.app)
 2. Switch to **Testnet** network
-3. Fund via [Stellar Friendbot](https://laboratory.stellar.org/#account-creator?network=test)
-4. Visit `/dashboard/wallets` → **Connect Freighter**
+3. Visit `/dashboard/wallets` → **Connect Freighter**
 
 ---
 
@@ -375,23 +373,6 @@ Copy `.env.example` → `.env` and configure:
 | `WS_PORT` | — | WebSocket port | `3001` |
 
 > ✱ `DEPLOYER_SECRET` is only needed for running `scripts/deploy-contract.ts`.
-
----
-
-## 🚢 Deployment
-
-**Live production:** [mizpah-pulse.vercel.app](https://mizpah-pulse.vercel.app)
-
-```bash
-# Deploy to Vercel (pre-configured vercel.json)
-npx vercel --prod
-```
-
-The monorepo is pre-configured for Vercel with:
-- Turborepo build orchestration
-- Prisma client generation
-- Next.js 15 framework optimization
-- Public environment variable injection
 
 ---
 
