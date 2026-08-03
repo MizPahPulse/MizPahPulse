@@ -114,6 +114,85 @@ jobs:
         run: npx turbo run build
 
   # ──────────────────────────────────────
+  # Smart Contract Build & Test
+  # ──────────────────────────────────────
+  contract:
+    name: Smart Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run contract tests
+        run: cd contracts && cargo test
+
+      - name: Build contract WASM
+        run: cd contracts && cargo build --target wasm32-unknown-unknown --release
+
+      - name: Verify WASM artifact
+        run: |
+          WASM_PATH="contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm"
+          if [ -f "$WASM_PATH" ]; then
+            echo "✅ WASM built: $(du -h "$WASM_PATH" | cut -f1)"
+          else
+            echo "❌ WASM not found at $WASM_PATH"
+            exit 1
+          fi
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-contract-wasm
+          path: contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm
+          retention-days: 30
+
+  # ──────────────────────────────────────
+  # Contract Deployment (manual trigger on main)
+  # Requires GitHub Secrets: DEPLOYER_SECRET
+  # ──────────────────────────────────────
+  deploy-contract:
+    name: Deploy Contract
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: [contract, lint-and-typecheck, test]
+    environment: testnet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pulse-contract-wasm
+          path: contracts/target/wasm32-unknown-unknown/release/
+
+      - name: Deploy contract to Stellar Testnet
+        run: npx tsx scripts/deploy-contract.ts
+        env:
+          DEPLOYER_SECRET: ${{ secrets.DEPLOYER_SECRET }}
+
+  # ──────────────────────────────────────
   # Docker Build (main only)
   # ──────────────────────────────────────
   docker:
