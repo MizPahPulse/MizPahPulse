@@ -58,12 +58,16 @@ export function Sidebar() {
       <button
         onClick={toggleMobile}
         className="fixed left-4 top-4 z-50 rounded-lg border border-slate-200 bg-white p-2 shadow-sm lg:hidden dark:border-slate-700 dark:bg-slate-900"
+        aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={mobileOpen}
       >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
       </button>
 
       {/* Sidebar */}
       <aside
+        role="navigation"
+        aria-label="Main navigation"
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 dark:border-slate-800 dark:bg-slate-950',
           collapsed ? 'w-[72px]' : 'w-[260px]',
@@ -84,7 +88,7 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-3">
+        <nav className="flex-1 overflow-y-auto p-3" aria-label="Dashboard sections">
           <ul className="space-y-1">
             {navigationItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -127,6 +131,7 @@ export function Sidebar() {
               'mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-300',
               collapsed && 'justify-center px-2',
             )}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             {!collapsed && <span>Collapse</span>}
@@ -177,14 +182,16 @@ export function Navbar() {
         <button
           onClick={toggleDark}
           className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {dark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
         </button>
         <Link
           href="/dashboard/settings"
           className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          aria-label="Settings"
         >
-          <Settings className="h-5 w-5" />
+          <Settings className="h-5 w-5" aria-hidden="true" />
         </Link>
         <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600" />
       </div>
