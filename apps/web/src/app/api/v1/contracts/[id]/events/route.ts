@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch paginated events for a specific Soroban contract.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
 
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);

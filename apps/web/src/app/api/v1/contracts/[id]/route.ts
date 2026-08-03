@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch Soroban smart contract details and recent invocations.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
 
   if (!isValidContractId(id)) {
     return NextResponse.json(

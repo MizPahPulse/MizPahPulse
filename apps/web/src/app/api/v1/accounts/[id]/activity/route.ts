@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch paginated activity feed for a specific Stellar account.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
 
   if (!isValidPublicKey(id)) {
     return NextResponse.json(

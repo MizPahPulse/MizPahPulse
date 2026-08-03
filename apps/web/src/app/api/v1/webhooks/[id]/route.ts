@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  *
  * Delete a registered webhook subscription.
  */
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function DELETE(request: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
 
   try {
     await prisma.webhookSubscription.delete({
