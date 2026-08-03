@@ -15,8 +15,8 @@ interface ContractActivity {
   status: 'active' | 'error' | 'idle';
 }
 
-// PulseContract ID — set via NEXT_PUBLIC_PULSE_CONTRACT_ID env var after deployment
-const DEPLOYED_CONTRACT_ID = process.env.NEXT_PUBLIC_PULSE_CONTRACT_ID || 'PASTE_YOUR_DEPLOYED_CONTRACT_ID_HERE';
+// PulseContract ID — deployed on Stellar Testnet
+const DEPLOYED_CONTRACT_ID = process.env.NEXT_PUBLIC_PULSE_CONTRACT_ID || 'CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C';
 
 const mockContracts: ContractActivity[] = [
   { id: 'pulse', contractId: DEPLOYED_CONTRACT_ID, name: 'PulseContract (Deployed)', invocations: 0, lastCalled: '—', status: 'active' },
