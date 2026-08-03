@@ -15,16 +15,16 @@ export default function HomePage() {
         </p>
         <div className="flex items-center justify-center gap-4">
           <a
-            href="/feed"
+            href="/dashboard"
             className="rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white transition-all hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/25"
           >
-            View Live Feed
+            Open Dashboard
           </a>
           <a
-            href="/analytics"
+            href="/dashboard/feed"
             className="rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            Analytics Dashboard
+            View Live Feed
           </a>
         </div>
       </div>
