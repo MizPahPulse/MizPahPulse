@@ -19,7 +19,7 @@ const NETWORK_CONFIGS: Record<StellarNetwork, Omit<StellarConfig, 'network' | 'i
   },
   TESTNET: {
     horizonUrl: 'https://horizon-testnet.stellar.org',
-    sorobanRpcUrl: 'https://soroban-rpc.testnet.stellar.org',
+    sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
     networkPassphrase: 'Test SDF Network ; September 2015',
   },
   FUTURENET: {
