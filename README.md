@@ -150,9 +150,9 @@ The `vercel.json` config is pre-configured for the Turborepo monorepo.
 
 ## Demo Video
 
-> **Demo Video:** `PASTE_YOUR_VIDEO_LINK_HERE`
->
-> 2-minute walkthrough covering:
+**Demo Video:** [Watch the 2-minute walkthrough](./screenshots/demo-video.mp4)
+
+Walkthrough covering:
 > 1. Wallet connect via Freighter
 > 2. XLM balance display
 > 3. Send XLM transaction
