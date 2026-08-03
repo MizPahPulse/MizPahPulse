@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useFreighter, type FreighterState } from '@/hooks/useFreighter';
 
 /**
@@ -25,6 +25,10 @@ interface WalletContextValue {
   disconnect: () => void;
   /** Refresh the public key (e.g. after page refresh) */
   refresh: () => Promise<string | null>;
+  /** Incrementing key that changes when a transaction completes — triggers balance refresh */
+  balanceRefreshKey: number;
+  /** Trigger a balance refresh (increments balanceRefreshKey) */
+  triggerBalanceRefresh: () => void;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -41,9 +45,14 @@ const WalletContext = createContext<WalletContextValue | null>(null);
  */
 export function WalletProvider({ children }: { children: ReactNode }) {
   const wallet = useFreighter();
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
+
+  const triggerBalanceRefresh = useCallback(() => {
+    setBalanceRefreshKey((k) => k + 1);
+  }, []);
 
   return (
-    <WalletContext.Provider value={wallet}>
+    <WalletContext.Provider value={{ ...wallet, balanceRefreshKey, triggerBalanceRefresh }}>
       {children}
     </WalletContext.Provider>
   );
