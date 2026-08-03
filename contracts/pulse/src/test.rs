@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::Env;
+use soroban_sdk::{Env, testutils::Events};
 
 #[test]
 fn test_pulse_increments_count() {
@@ -60,8 +60,8 @@ fn test_inter_contract_communication() {
     let client_b = PulseContractClient::new(&env, &contract_b_id);
 
     // Contract A broadcasts a pulse to Contract B
-    let target_addr = Address::from_contract_id(&env, &contract_b_id);
-    let (count, _result) = client_a.broadcast_pulse(&target_addr, &symbol_short!("alice"));
+    // contract_b_id is already an Address (register_contract returns Address in SDK v21.7+)
+    let (count, _result) = client_a.broadcast_pulse(&contract_b_id, &symbol_short!("alice"));
 
     assert_eq!(count, 1, "Contract A should have count 1 after broadcast");
 
