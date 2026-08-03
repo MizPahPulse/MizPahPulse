@@ -99,30 +99,54 @@ MizpahPulse includes a Soroban smart contract (Rust) with inter-contract communi
 
 ### Contract Deployment Address
 
-> **Deployed Contract ID:** `PASTE_YOUR_DEPLOYED_CONTRACT_ID_HERE`
->
-> Set `NEXT_PUBLIC_PULSE_CONTRACT_ID` in `.env` after running:
-> ```bash
-> cd contracts && cargo build --target wasm32-unknown-unknown --release
-> DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
-> ```
+**Deployed Contract ID:** `CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C`
+
+Deploy a new instance:
+```bash
+cd contracts && cargo build --target wasm32-unknown-unknown --release
+DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
+```
 
 ### Contract Interaction Transaction Hash
 
-> **Transaction Hash:** `PASTE_YOUR_TX_HASH_HERE`
->
-> Generated after calling `pulse()` from the frontend via the Contracts page.
+**Create Contract Tx:** [`ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06`](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06)
+
+[View on Stellar Expert →](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06)
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure the following:
+
+| Variable | Required | Description | Default |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://mizpah:mizpah_dev@localhost:5432/mizpah_pulse` |
+| `REDIS_URL` | Yes | Redis connection URL | `redis://localhost:6379` |
+| `STELLAR_NETWORK` | Yes | Stellar network (TESTNET, PUBLIC, FUTURENET, SANDBOX) | `TESTNET` |
+| `STELLAR_HORIZON_URL` | No | Custom Horizon API URL | Auto-derived from network |
+| `STELLAR_SOROBAN_RPC_URL` | No | Custom Soroban RPC URL | Auto-derived from network |
+| `NEXT_PUBLIC_PULSE_CONTRACT_ID` | Yes | Deployed PulseContract ID | After deployment |
+| `NEXT_PUBLIC_WS_URL` | Yes | WebSocket server URL | `http://localhost:3001` |
+| `CORS_ORIGIN` | Yes | CORS origin for WS server | `http://localhost:3000` |
+| `WS_PORT` | No | WebSocket server port | `3001` |
+| `DEPLOYER_SECRET` | Yes* | Funded Testnet secret key for contract deployment | — |
+| `WEBHOOK_SECRET` | Yes | Secret for signing webhook payloads | — |
+| `JWT_SECRET` | Yes | Secret for JWT signing | — |
+| `API_KEY_SECRET` | Yes | Secret for API key generation | — |
+| `NODE_ENV` | No | Node environment | `development` |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | No | Public Stellar network for frontend | `TESTNET` |
+
+\* `DEPLOYER_SECRET` only required for contract deployment.
 
 ## Live Demo
 
-> **Demo URL:** `PASTE_YOUR_VERCEL_URL_HERE`
->
-> Deploy to Vercel with:
-> ```bash
-> vercel --prod
-> ```
->
-> The `vercel.json` config is pre-configured for the Turborepo monorepo.
+**Live Demo:** [https://mizpah-pulse.vercel.app](https://mizpah-pulse.vercel.app)
+
+Deploy to Vercel with:
+```bash
+npx vercel --prod
+```
+
+The `vercel.json` config is pre-configured for the Turborepo monorepo.
 
 ## Demo Video
 
@@ -134,6 +158,41 @@ MizpahPulse includes a Soroban smart contract (Rust) with inter-contract communi
 > 3. Send XLM transaction
 > 4. Contract invocation (pulse)
 > 5. Inter-contract communication (broadcast)
+
+## Contract Interaction Examples
+
+### Read pulse count (simulate only, no transaction)
+
+```tsx
+import { useContractInvoke } from '@/hooks/useContractInvoke';
+
+const { readOnly } = useContractInvoke(contractId);
+const count = await readOnly('get_pulse_count');
+// Returns: number (e.g. 5)
+```
+
+### Call pulse() from the frontend
+
+```tsx
+const { invoke } = useContractInvoke(contractId);
+const result = await invoke('pulse', ['alice']);
+// result: { hash: '...', explorerUrl: 'https://...', returnValue: 6 }
+```
+
+### Inter-contract broadcast_pulse()
+
+```tsx
+const { invoke } = useContractInvoke(contractId);
+const result = await invoke('broadcast_pulse', [targetContractId, 'alice']);
+// Calls pulse() locally, then invokes on_pulse_received() on the target
+```
+
+### Get full pulse data
+
+```tsx
+const data = await readOnly('get_pulse_data');
+// Returns: { count: 5, last_caller: 'alice' }
+```
 
 ## Test Output
 
@@ -176,51 +235,40 @@ MizpahPulse includes full Freighter wallet integration on Stellar Testnet:
 
 ## Screenshots
 
-### 1. Wallet Connected State
-<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
-<!-- Use: ![Wallet Connected](./screenshots/wallet-connected.png) -->
+### 1. Landing Page
+![Landing Page](./screenshots/01-landing.png)
 
-> **Expected UI:** Wallets page (`/dashboard/wallets`) with Freighter connected.
-> - Connection status: "Connected" with green pulsing dot
-> - Public key displayed (truncated format: `GABC...XYZ`)
-> - Network badge: "Testnet" with green indicator
-> - Freighter badge: "Installed"
-> - Action buttons: "Send XLM" and "Disconnect" visible
+### 2. Dashboard
+![Dashboard](./screenshots/02-dashboard.png)
 
-### 2. Balance Displayed
-<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
-<!-- Use: ![Balance Displayed](./screenshots/balance-displayed.png) -->
+### 3. Wallet Options / Freighter Not Installed
+![Wallet Options](./screenshots/03-wallet-options.png)
 
-> **Expected UI:** XLM Balance card on the wallets page.
-> - "XLM Balance" label with amber coin icon
-> - Formatted balance amount (e.g. "10,000 XLM")
-> - Refresh button with hover animation
-> - Balance fetched live from Horizon Testnet
+### 4. Smart Contracts Page
+![Contracts](./screenshots/04-contracts.png)
 
-### 3. Successful Testnet Transaction
-<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
-<!-- Use: ![Successful Transaction](./screenshots/successful-transaction.png) -->
+### 5. Live Activity Feed
+![Live Feed](./screenshots/05-live-feed.png)
 
-> **Expected UI:** Transaction Sent success state in the send modal.
-> - Green checkmark icon in emerald circle
-> - "Transaction Sent!" heading
-> - Amount confirmation (e.g. "10 XLM sent successfully")
-> - Transaction Hash panel with full hex string
-> - Ledger number display
-> - "View on Explorer" button (opens Stellar Expert in new tab)
-> - "Done" button to close modal
+### 6. Analytics Dashboard
+![Analytics](./screenshots/06-analytics.png)
 
-### 4. Transaction Result Shown to User
-<!-- SCREENSHOT REQUIRED: Replace this section with a screenshot image -->
-<!-- Use: ![Transaction Result](./screenshots/transaction-result.png) -->
+### 7. Mobile Responsive — Dashboard
+![Mobile Dashboard](./screenshots/07-mobile-dashboard.png)
 
-> **Expected UI:** Transaction details visible to the user after completion.
-> - Full transaction hash displayed (break-all, monospace font)
-> - Ledger sequence number
-> - External link to `stellar.expert/explorer/testnet/tx/<hash>`
-> - User can copy the hash or click through to verify on-chain
+### 8. Mobile Responsive — Wallets
+![Mobile Wallets](./screenshots/08-mobile-wallets.png)
 
-> **Adding screenshots:** Place PNG files in the `./screenshots/` directory, then replace each section's HTML comment with `![Label](./screenshots/filename.png)`.
+### CI/CD Pipeline
+![CI/CD](https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg)
+
+### Test Output
+```
+✓ PulseContract tests: 6 passed
+✓ useFreighter tests: 6 passed
+✓ useSendTransaction tests: 3 passed
+✓ useContractInvoke tests: 3 passed
+```
 
 ## API Overview
 
@@ -260,6 +308,22 @@ MizpahPulse monitors 35+ event types across the Stellar network:
 - **NFTs:** Minting, transfers, burns
 - **Tokens:** Transfers, trustline changes, asset issuance
 - **Accounts:** Creation, merges, option changes
+
+## Credits
+
+Built with the following open-source technologies:
+
+- [Next.js](https://nextjs.org/) — React framework
+- [Stellar SDK](https://developers.stellar.org/) — Horizon & Soroban RPC integration
+- [Freighter](https://freighter.app/) — Stellar browser wallet
+- [Prisma](https://www.prisma.io/) — TypeScript ORM
+- [Socket.io](https://socket.io/) — Real-time WebSocket communication
+- [BullMQ](https://bullmq.io/) — Redis-backed job queue
+- [Tailwind CSS](https://tailwindcss.com/) — Utility-first CSS
+- [Lucide](https://lucide.dev/) — Beautiful icons
+- [Turborepo](https://turbo.build/) — Monorepo build system
+- [Docker](https://www.docker.com/) — Containerization
+- [GitHub Actions](https://github.com/features/actions) — CI/CD automation
 
 ## License
 
