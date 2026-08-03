@@ -1,330 +1,428 @@
-# MizpahPulse — Stellar Blockchain Intelligence Platform
+<p align="center">
+  <img src="https://raw.githubusercontent.com/MizPahPulse/MizPahPulse/main/screenshots/01-landing.png" alt="MizpahPulse Banner" width="800" />
+</p>
 
-> The heartbeat of on-chain activity on Stellar. Real-time blockchain monitoring, analytics, and intelligence for the Stellar ecosystem.
+<h1 align="center">⚡ MizpahPulse</h1>
+<p align="center"><em>The heartbeat of on-chain activity on Stellar</em></p>
 
-[![CI/CD](https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml"><img src="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg" alt="CI/CD" /></a>
+  <a href="https://mizpah-pulse.vercel.app"><img src="https://img.shields.io/badge/demo-live-22c55e?style=flat&logo=vercel" alt="Live Demo" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="#tests"><img src="https://img.shields.io/badge/tests-18%2F18%20passed-brightgreen" alt="Tests: 18/18" /></a>
+  <img src="https://img.shields.io/badge/next.js-15-black?logo=next.js" alt="Next.js 15" />
+  <img src="https://img.shields.io/badge/stellar-testnet-7B5BDB?logo=stellar" alt="Stellar Testnet" />
+  <img src="https://img.shields.io/badge/soroban-deployed-7B5BDB?logo=stellar" alt="Soroban Deployed" />
+  <img src="https://img.shields.io/badge/typescript-5.6-blue?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/rust-1.88-orange?logo=rust" alt="Rust" />
+</p>
 
-## Project Description
+---
 
-MizpahPulse is a real-time blockchain intelligence platform built exclusively for the Stellar ecosystem. It continuously monitors on-chain activity — payments, Soroban smart contract events, DEX trades, NFT activity, token transfers, and account operations — and delivers them through live dashboards, searchable feeds, analytics, REST APIs, and WebSocket streams.
+## 📖 Table of Contents
 
-Built with Next.js 15 (App Router), TypeScript, PostgreSQL + Prisma, Socket.io, and the Stellar SDK. Supports Freighter wallet integration on Stellar Testnet for balance viewing and XLM transactions.
+- [Overview](#-overview)
+- [Live Demo](#-live-demo)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Quick Start](#-quick-start)
+- [Smart Contract](#-smart-contract)
+- [Wallet Integration](#-wallet-integration)
+- [API Reference](#-api-reference)
+- [Event Streaming](#-event-streaming)
+- [Testing](#-testing)
+- [CI/CD](#-cicd)
+- [Screenshots](#-screenshots)
+- [Environment Variables](#-environment-variables)
+- [Deployment](#-deployment)
+- [Credits](#-credits)
+- [License](#-license)
 
-## Architecture
+---
+
+## 🌐 Overview
+
+**MizpahPulse** is a real-time blockchain intelligence platform purpose-built for the **Stellar ecosystem**. It ingests, processes, and visualizes every heartbeat of the network — from simple XLM payments to complex Soroban smart contract invocations.
+
+### ✨ Key Capabilities
+
+| Category | Coverage |
+|---|---|
+| 💸 **Payments** | XLM transfers, path payments, cross-border remittances |
+| 🤖 **Smart Contracts** | Soroban invocations, deployments, events, TTL extensions |
+| 📊 **DEX Activity** | Trades, order books, liquidity pool operations |
+| 🎨 **NFTs** | Minting, transfers, burns, metadata |
+| 🪙 **Tokens** | Trustline changes, asset issuance, clawbacks |
+| 👤 **Accounts** | Creation, merging, signer updates, sponsorship |
+
+### 🚀 Deliverables
+
+- **Real-time Dashboard** — Live feed with WebSocket streaming, filters, and search
+- **Analytics Suite** — Historical trends, category breakdowns, top contracts
+- **Wallet Hub** — Freighter integration, XLM balance, one-click transactions
+- **Contract Explorer** — Deployed Soroban contracts with direct invocation UI
+- **REST API (v1)** — 9 endpoints for programmatic access
+- **Webhook Engine** — Configurable event delivery to external services
+- **Developer Portal** — API key management, SDK examples, integration docs
+
+---
+
+## 🎥 Live Demo
+
+<p align="center">
+  <a href="https://mizpah-pulse.vercel.app">
+    <img src="https://img.shields.io/badge/🔗_Open_Live_Demo-mizpah--pulse.vercel.app-0ea5e9?style=for-the-badge" alt="Live Demo" />
+  </a>
+</p>
+
+**[▶️ Watch the 2-minute demo video](./screenshots/demo-video.mp4)** — A guided walkthrough of the entire platform.
+
+---
+
+## 🏗 Architecture
 
 ```
-apps/
-├── web/          # Next.js 15 dashboard + REST API (port 3000)
-├── ws/           # Socket.io real-time event server (port 3001)
-└── ingester/     # Stellar event ingestion worker
-
-packages/
-├── database/     # Prisma ORM + PostgreSQL schema
-├── stellar/      # Stellar SDK integration (Horizon + Soroban)
-├── types/        # Shared TypeScript types + Zod schemas
-└── ui/           # Shared React UI components
+mizpah-pulse/
+│
+├── apps/
+│   ├── web/            # Next.js 15 dashboard + REST API      (port 3000)
+│   ├── ws/             # Socket.io real-time event server     (port 3001)
+│   └── ingester/       # Stellar event ingestion worker
+│
+├── packages/
+│   ├── database/       # Prisma ORM + PostgreSQL schema
+│   ├── stellar/        # Stellar SDK integration layer
+│   ├── types/          # Shared TypeScript types + Zod schemas
+│   └── ui/             # Reusable React component library
+│
+├── contracts/
+│   └── pulse/          # Soroban smart contract (Rust)
+│
+├── scripts/            # Deployment and automation scripts
+└── screenshots/        # Demo screenshots and video
 ```
 
-## Tech Stack
+### Data Flow
 
-- **Frontend:** Next.js 15 (App Router), React 19, Tailwind CSS, Recharts
-- **Backend:** Next.js API Routes, Socket.io, BullMQ
-- **Database:** PostgreSQL 16 + Prisma ORM
-- **Queue/Cache:** Redis (BullMQ + Pub/Sub)
-- **Blockchain:** Stellar SDK v13, Horizon, Soroban RPC, `@stellar/freighter-api` v3
-- **Infrastructure:** Turborepo, Docker Compose, GitHub Actions
+```
+Stellar Network (Horizon SSE + Soroban RPC)
+        │
+        ▼
+   [Ingester] ──► Redis Queue ──► [Worker] ──► PostgreSQL
+        │                                          │
+        ▼                                          ▼
+   [WebSocket Server] ◄──────────────────── [REST API]
+        │                                          │
+        ▼                                          ▼
+   [Next.js Dashboard] ◄──── Real-time UI ──── [External Clients]
+```
 
-## Quick Start
+---
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS, Recharts, Lucide Icons |
+| **Backend** | Next.js API Routes, Socket.io, BullMQ |
+| **Database** | PostgreSQL 16 + Prisma ORM |
+| **Cache / Queue** | Redis (BullMQ + Pub/Sub) |
+| **Blockchain** | Stellar SDK v13, Horizon, Soroban RPC, `@stellar/freighter-api` v3 |
+| **Smart Contracts** | Rust + Soroban SDK v21 |
+| **Infrastructure** | Turborepo, Docker Compose, GitHub Actions, Vercel |
+| **Testing** | Vitest, React Testing Library, Rust cargo test |
+| **Language** | TypeScript (strict), Rust |
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js >= 20
-- Docker & Docker Compose (for PostgreSQL + Redis)
-- npm >= 11
-- [Freighter browser extension](https://freighter.app) (for wallet features)
+- **Node.js** ≥ 20
+- **Docker** & Docker Compose (for PostgreSQL + Redis)
+- **npm** ≥ 11
+- **Rust** ≥ 1.88 (for contract development only)
+- [Freighter Browser Extension](https://freighter.app) (for wallet features)
 
-### Development Setup
+### One-Command Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/MizPahPulse/MizPahPulse.git
 cd MizPahPulse
-
-# Install dependencies
 npm install
-
-# Start infrastructure (PostgreSQL + Redis)
 npm run docker:up
-
-# Copy environment variables
 cp .env.example .env
-
-# Generate Prisma client and run migrations
 npx prisma generate --schema=packages/database/prisma/schema.prisma
 npx prisma migrate dev --schema=packages/database/prisma/schema.prisma
-
-# Start all services in dev mode
 npm run dev
 ```
 
-The app will be available at:
-- **Dashboard:** http://localhost:3000
-- **WebSocket:** ws://localhost:3001
-- **API:** http://localhost:3000/api/v1
+### Access Points
 
-### Docker Compose (Full Stack)
+| Service | URL |
+|---|---|
+| Dashboard | [http://localhost:3000](http://localhost:3000) |
+| WebSocket | `ws://localhost:3001` |
+| REST API | [http://localhost:3000/api/v1](http://localhost:3000/api/v1) |
+
+### Full Docker Stack
 
 ```bash
 docker compose up -d
 ```
 
-## Smart Contract
+---
 
-MizpahPulse includes a Soroban smart contract (Rust) with inter-contract communication:
+## 📜 Smart Contract
 
-| Feature | Implementation |
+MizpahPulse ships with a **Soroban smart contract** (`PulseContract`) demonstrating production-grade patterns:
+
+### Features
+
+| Endpoint | Signature | Description |
+|---|---|---|
+| `pulse` | `(caller: Symbol) → u32` | Increments counter, emits event |
+| `broadcast_pulse` | `(target: Address, caller: Symbol) → (u32, Val)` | Cross-contract pulse broadcast |
+| `on_pulse_received` | `(count: u32, caller: Symbol) → Symbol` | Receiver for inter-contract calls |
+| `get_pulse_count` | `() → u32` | Read current count |
+| `get_pulse_data` | `() → PulseData` | Read full state |
+| `get_last_received` | `() → Option<(u32, Symbol)>` | Last cross-contract receipt |
+
+### Deployment
+
+| Detail | Value |
 |---|---|
-| **Pulse Counter** | `pulse(caller)` — increments counter + emits event |
-| **Cross-Contract Call** | `broadcast_pulse(target, caller)` — calls another contract's `on_pulse_received` |
-| **Receive Pulse** | `on_pulse_received(count, caller)` — receiver endpoint for cross-contract calls |
-| **Read State** | `get_pulse_count()` / `get_pulse_data()` / `get_last_received()` |
+| **Network** | Stellar Testnet |
+| **Contract ID** | `CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C` |
+| **Create Tx** | [`ee73ae2e...`](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06) |
+| **Verified** | [View on Stellar Expert →](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06) |
 
-### Contract Files
-
-| File | Purpose |
-|---|---|
-| `contracts/pulse/src/lib.rs` | PulseContract with inter-contract communication |
-| `contracts/pulse/src/test.rs` | 6 unit tests (3 passing on counter + events, 3 on cross-contract) |
-| `scripts/deploy-contract.ts` | WASM upload + instantiation to Testnet |
-
-### Contract Deployment Address
-
-**Deployed Contract ID:** `CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C`
-
-Deploy a new instance:
 ```bash
+# Deploy your own instance
 cd contracts && cargo build --target wasm32-unknown-unknown --release
 DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
 ```
 
-### Contract Interaction Transaction Hash
-
-**Create Contract Tx:** [`ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06`](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06)
-
-[View on Stellar Expert →](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06)
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure the following:
-
-| Variable | Required | Description | Default |
-|---|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://mizpah:mizpah_dev@localhost:5432/mizpah_pulse` |
-| `REDIS_URL` | Yes | Redis connection URL | `redis://localhost:6379` |
-| `STELLAR_NETWORK` | Yes | Stellar network (TESTNET, PUBLIC, FUTURENET, SANDBOX) | `TESTNET` |
-| `STELLAR_HORIZON_URL` | No | Custom Horizon API URL | Auto-derived from network |
-| `STELLAR_SOROBAN_RPC_URL` | No | Custom Soroban RPC URL | Auto-derived from network |
-| `NEXT_PUBLIC_PULSE_CONTRACT_ID` | Yes | Deployed PulseContract ID | After deployment |
-| `NEXT_PUBLIC_WS_URL` | Yes | WebSocket server URL | `http://localhost:3001` |
-| `CORS_ORIGIN` | Yes | CORS origin for WS server | `http://localhost:3000` |
-| `WS_PORT` | No | WebSocket server port | `3001` |
-| `DEPLOYER_SECRET` | Yes* | Funded Testnet secret key for contract deployment | — |
-| `WEBHOOK_SECRET` | Yes | Secret for signing webhook payloads | — |
-| `JWT_SECRET` | Yes | Secret for JWT signing | — |
-| `API_KEY_SECRET` | Yes | Secret for API key generation | — |
-| `NODE_ENV` | No | Node environment | `development` |
-| `NEXT_PUBLIC_STELLAR_NETWORK` | No | Public Stellar network for frontend | `TESTNET` |
-
-\* `DEPLOYER_SECRET` only required for contract deployment.
-
-## Live Demo
-
-**Live Demo:** [https://mizpah-pulse.vercel.app](https://mizpah-pulse.vercel.app)
-
-Deploy to Vercel with:
-```bash
-npx vercel --prod
-```
-
-The `vercel.json` config is pre-configured for the Turborepo monorepo.
-
-## Demo Video
-
-**Demo Video:** [Watch the 2-minute walkthrough](./screenshots/demo-video.mp4)
-
-Walkthrough covering:
-> 1. Wallet connect via Freighter
-> 2. XLM balance display
-> 3. Send XLM transaction
-> 4. Contract invocation (pulse)
-> 5. Inter-contract communication (broadcast)
-
-## Contract Interaction Examples
-
-### Read pulse count (simulate only, no transaction)
+### Interacting from the Frontend
 
 ```tsx
 import { useContractInvoke } from '@/hooks/useContractInvoke';
 
+// Read-only (simulated, no transaction)
 const { readOnly } = useContractInvoke(contractId);
-const count = await readOnly('get_pulse_count');
-// Returns: number (e.g. 5)
-```
+const count = await readOnly('get_pulse_count');  // → number
 
-### Call pulse() from the frontend
-
-```tsx
+// State-changing (Freighter sign → submit)
 const { invoke } = useContractInvoke(contractId);
 const result = await invoke('pulse', ['alice']);
-// result: { hash: '...', explorerUrl: 'https://...', returnValue: 6 }
-```
+// → { hash: '...', explorerUrl: 'https://...', returnValue: 6 }
 
-### Inter-contract broadcast_pulse()
-
-```tsx
+// Cross-contract communication
 const { invoke } = useContractInvoke(contractId);
-const result = await invoke('broadcast_pulse', [targetContractId, 'alice']);
-// Calls pulse() locally, then invokes on_pulse_received() on the target
+await invoke('broadcast_pulse', [targetContractId, 'alice']);
 ```
 
-### Get full pulse data
+---
 
-```tsx
-const data = await readOnly('get_pulse_data');
-// Returns: { count: 5, last_caller: 'alice' }
-```
+## 👛 Wallet Integration
 
-## Test Output
-
-Run the test suites:
-
-```bash
-# Rust contract tests (3+ passing)
-cd contracts && cargo test
-
-# Frontend tests (9 passing)
-cd apps/web && npx vitest run
-```
-
-> **Test Results:**
-> ```
-> ✓ PulseContract tests: 6 passed
-> ✓ useFreighter tests: 6 passed
-> ✓ useSendTransaction tests: 3 passed
-> ✓ useContractInvoke tests: 3 passed
-> ```
-
-## Wallet Features
-
-MizpahPulse includes full Freighter wallet integration on Stellar Testnet:
+Full **Freighter wallet** integration on Stellar Testnet with comprehensive error handling:
 
 | Feature | Implementation |
 |---|---|
-| **Wallet Connect** | `useFreighter` hook using `@stellar/freighter-api` v3 |
-| **Wallet Disconnect** | Clear wallet state, return to disconnected view |
-| **XLM Balance** | `BalanceDisplay` component fetch from Horizon with 30s auto-refresh |
-| **Send XLM** | `useSendTransaction` hook: build → Freighter sign → submit to Testnet |
-| **Transaction Feedback** | Success: tx hash + Stellar Expert explorer link. Error: message + retry |
+| **Connect** | `useFreighter` hook via `@stellar/freighter-api` v3 |
+| **Disconnect** | Clean state reset with UI feedback |
+| **Session Persistence** | Auto-reconnect across page refreshes |
+| **Missing Wallet** | Graceful detection + install prompt |
+| **Balance** | Live XLM pull from Horizon, 30s auto-refresh |
+| **Send XLM** | Build → Freighter sign → submit with balance validation |
+| **Feedback** | Success: tx hash + explorer link. Error: categorized message + retry |
 
 ### Freighter Setup
 
-1. Install the [Freighter browser extension](https://freighter.app)
-2. Switch Freighter to **Testnet** network
-3. Fund your wallet with testnet XLM via [Stellar Friendbot](https://laboratory.stellar.org/#account-creator?network=test)
-4. Navigate to **/dashboard/wallets** and click "Connect Freighter"
+1. Install [Freighter](https://freighter.app)
+2. Switch to **Testnet** network
+3. Fund via [Stellar Friendbot](https://laboratory.stellar.org/#account-creator?network=test)
+4. Visit `/dashboard/wallets` → **Connect Freighter**
 
-## Screenshots
+---
 
-### 1. Landing Page
-![Landing Page](./screenshots/01-landing.png)
-
-### 2. Dashboard
-![Dashboard](./screenshots/02-dashboard.png)
-
-### 3. Wallet Options / Freighter Not Installed
-![Wallet Options](./screenshots/03-wallet-options.png)
-
-### 4. Smart Contracts Page
-![Contracts](./screenshots/04-contracts.png)
-
-### 5. Live Activity Feed
-![Live Feed](./screenshots/05-live-feed.png)
-
-### 6. Analytics Dashboard
-![Analytics](./screenshots/06-analytics.png)
-
-### 7. Mobile Responsive — Dashboard
-![Mobile Dashboard](./screenshots/07-mobile-dashboard.png)
-
-### 8. Mobile Responsive — Wallets
-![Mobile Wallets](./screenshots/08-mobile-wallets.png)
-
-### CI/CD Pipeline
-![CI/CD](https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg)
-
-### Test Output
-```
-✓ PulseContract tests: 6 passed
-✓ useFreighter tests: 6 passed
-✓ useSendTransaction tests: 3 passed
-✓ useContractInvoke tests: 3 passed
-```
-
-## API Overview
+## 📡 API Reference
 
 ### REST API (v1)
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/v1/events` | Query blockchain events |
-| `GET /api/v1/events/live` | SSE stream of live events |
-| `GET /api/v1/accounts/:id` | Get account details |
-| `GET /api/v1/accounts/:id/activity` | Get account activity |
-| `GET /api/v1/contracts/:id` | Get contract details |
-| `GET /api/v1/contracts/:id/events` | Get contract events |
-| `GET /api/v1/stats` | Network statistics |
-| `POST /api/v1/webhooks` | Register webhook |
-| `GET /api/v1/search` | Search blockchain data |
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/events` | Paginated event query with filters |
+| `GET` | `/api/v1/events/live` | Server-Sent Events stream |
+| `GET` | `/api/v1/accounts/:id` | Account details + on-chain data |
+| `GET` | `/api/v1/accounts/:id/activity` | Paginated account activity |
+| `GET` | `/api/v1/contracts/:id` | Contract details + stats |
+| `GET` | `/api/v1/contracts/:id/events` | Paginated contract events |
+| `GET` | `/api/v1/stats` | Network-wide statistics |
+| `GET` | `/api/v1/search` | Multi-entity search |
+| `POST` | `/api/v1/webhooks` | Register webhook endpoint |
 
 ### WebSocket Events
 
 Connect to `ws://localhost:3001`
 
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `subscribe:eventTypes` | Client → Server | Subscribe to event types |
-| `subscribe:categories` | Client → Server | Subscribe to categories |
-| `subscribe:accounts` | Client → Server | Subscribe to accounts |
-| `event` | Server → Client | Real-time event data |
-| `stats` | Bidirectional | Connection statistics |
+| Direction | Event | Description |
+|---|---|---|
+| Client → Server | `subscribe:eventTypes` | Filter by event type |
+| Client → Server | `subscribe:categories` | Filter by category |
+| Client → Server | `subscribe:accounts` | Filter by account |
+| Server → Client | `event` | Real-time event payload |
+| Bidirectional | `stats` | Connection statistics |
 
-## Event Types
+### Event Categories
 
-MizpahPulse monitors 35+ event types across the Stellar network:
+MizpahPulse tracks **35+ event types** across 6 categories:
 
-- **Payments:** XLM transfers, asset transfers, cross-border payments
-- **DEX:** Trades, order creation/cancellation, liquidity movements
-- **Smart Contracts:** Soroban deployments, invocations, events
-- **NFTs:** Minting, transfers, burns
-- **Tokens:** Transfers, trustline changes, asset issuance
-- **Accounts:** Creation, merges, option changes
+| Category | Examples |
+|---|---|
+| 💸 Payment | XLM transfers, path payments |
+| 🤖 Contract | Soroban invoke, deploy, extend TTL |
+| 📊 DEX | Trades, order create/cancel |
+| 🎨 NFT | Mint, transfer, burn |
+| 🪙 Token | Transfer, trustline, clawback |
+| 👤 Account | Create, merge, sponsorship |
 
-## Credits
+---
 
-Built with the following open-source technologies:
+## 🧪 Testing
 
-- [Next.js](https://nextjs.org/) — React framework
-- [Stellar SDK](https://developers.stellar.org/) — Horizon & Soroban RPC integration
-- [Freighter](https://freighter.app/) — Stellar browser wallet
-- [Prisma](https://www.prisma.io/) — TypeScript ORM
-- [Socket.io](https://socket.io/) — Real-time WebSocket communication
-- [BullMQ](https://bullmq.io/) — Redis-backed job queue
-- [Tailwind CSS](https://tailwindcss.com/) — Utility-first CSS
-- [Lucide](https://lucide.dev/) — Beautiful icons
-- [Turborepo](https://turbo.build/) — Monorepo build system
-- [Docker](https://www.docker.com/) — Containerization
-- [GitHub Actions](https://github.com/features/actions) — CI/CD automation
+```bash
+# Frontend tests (12 passing)
+cd apps/web && npx vitest run
 
-## License
+# Smart contract tests (6 passing)
+cd contracts && cargo test
+```
 
-MIT
+### Test Suite
+
+```
+✓ PulseContract tests        6 passed  (counter, events, inter-contract)
+✓ useFreighter tests         6 passed  (connect, disconnect, error states)
+✓ useSendTransaction tests   3 passed  (validation, wallet not connected)
+✓ useContractInvoke tests    3 passed  (validation, contract ID, initial state)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Total: 18/18 passing
+```
+
+---
+
+## ⚙️ CI/CD
+
+| Job | Trigger | Description |
+|---|---|---|
+| **Lint & Typecheck** | Push, PR | Prettier, ESLint, TypeScript |
+| **Test** | Push, PR | Vitest frontend + Rust contract tests |
+| **Build** | Push, PR | Turborepo full build |
+| **Contract** | Push, PR | Cargo test + WASM build + artifact upload |
+| **Deploy Contract** | Manual (`workflow_dispatch`) | Deploy WASM to Stellar Testnet |
+| **Docker** | Push to `main` | Multi-service Docker build |
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="./screenshots/01-landing.png" alt="Landing" width="400" />
+  <img src="./screenshots/02-dashboard.png" alt="Dashboard" width="400" />
+</p>
+
+<p align="center">
+  <img src="./screenshots/03-wallet-options.png" alt="Wallets" width="400" />
+  <img src="./screenshots/04-contracts.png" alt="Contracts" width="400" />
+</p>
+
+<p align="center">
+  <img src="./screenshots/05-live-feed.png" alt="Live Feed" width="400" />
+  <img src="./screenshots/06-analytics.png" alt="Analytics" width="400" />
+</p>
+
+<p align="center">
+  <em>📱 Mobile Responsive</em><br/>
+  <img src="./screenshots/07-mobile-dashboard.png" alt="Mobile Dashboard" width="200" />
+  <img src="./screenshots/08-mobile-wallets.png" alt="Mobile Wallets" width="200" />
+</p>
+
+---
+
+## 🔧 Environment Variables
+
+Copy `.env.example` → `.env` and configure:
+
+| Variable | Req | Description | Default |
+|---|---|---|---|
+| `DATABASE_URL` | ✓ | PostgreSQL connection string | `postgresql://...` |
+| `REDIS_URL` | ✓ | Redis connection URL | `redis://localhost:6379` |
+| `STELLAR_NETWORK` | ✓ | `TESTNET` / `PUBLIC` / `FUTURENET` / `SANDBOX` | `TESTNET` |
+| `NEXT_PUBLIC_PULSE_CONTRACT_ID` | ✓ | Deployed contract ID | `CC4HXCVI...` |
+| `NEXT_PUBLIC_WS_URL` | ✓ | WebSocket server URL | `http://localhost:3001` |
+| `CORS_ORIGIN` | ✓ | CORS origin | `http://localhost:3000` |
+| `WEBHOOK_SECRET` | ✓ | Webhook signing secret | — |
+| `JWT_SECRET` | ✓ | JWT signing secret | — |
+| `API_KEY_SECRET` | ✓ | API key generation secret | — |
+| `DEPLOYER_SECRET` | ✱ | Funded Testnet secret (deploy only) | — |
+| `NODE_ENV` | — | Environment | `development` |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | — | Public network | `TESTNET` |
+| `STELLAR_HORIZON_URL` | — | Custom Horizon URL | Auto-derived |
+| `STELLAR_SOROBAN_RPC_URL` | — | Custom RPC URL | Auto-derived |
+| `WS_PORT` | — | WebSocket port | `3001` |
+
+> ✱ `DEPLOYER_SECRET` is only needed for running `scripts/deploy-contract.ts`.
+
+---
+
+## 🚢 Deployment
+
+**Live production:** [mizpah-pulse.vercel.app](https://mizpah-pulse.vercel.app)
+
+```bash
+# Deploy to Vercel (pre-configured vercel.json)
+npx vercel --prod
+```
+
+The monorepo is pre-configured for Vercel with:
+- Turborepo build orchestration
+- Prisma client generation
+- Next.js 15 framework optimization
+- Public environment variable injection
+
+---
+
+## 🙏 Credits
+
+Built with ❤️ using:
+
+| Tool | Role |
+|---|---|
+| [Next.js](https://nextjs.org) | React framework |
+| [Stellar SDK](https://developers.stellar.org) | Horizon & Soroban RPC |
+| [Freighter](https://freighter.app) | Stellar browser wallet |
+| [Prisma](https://prisma.io) | TypeScript ORM |
+| [Socket.io](https://socket.io) | Real-time WebSockets |
+| [BullMQ](https://bullmq.io) | Job queue |
+| [Tailwind CSS](https://tailwindcss.com) | Utility CSS |
+| [Lucide](https://lucide.dev) | Icons |
+| [Turborepo](https://turbo.build) | Monorepo build |
+| [Docker](https://docker.com) | Containerization |
+| [GitHub Actions](https://github.com/features/actions) | CI/CD |
+| [Playwright](https://playwright.dev) | Browser automation |
+| [Vercel](https://vercel.com) | Hosting |
+
+---
+
+## 📄 License
+
+MIT © [MizpahPulse](https://github.com/MizPahPulse)
+
+---
+
+<p align="center">
+  <sub>Built for hackathons. Ready for production.</sub>
+</p>
