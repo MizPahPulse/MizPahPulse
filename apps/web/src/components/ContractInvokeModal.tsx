@@ -34,7 +34,7 @@ interface ContractInvokeModalProps {
  * - Error (3 error types: validation, connection, contract error)
  */
 export function ContractInvokeModal({ contractId, isOpen, onClose }: ContractInvokeModalProps) {
-  const { publicKey, isConnected } = useWallet();
+  const { publicKey, isConnected, triggerBalanceRefresh } = useWallet();
   const { invoke, readOnly, reset, state, result, error, isInvoking, isSuccess, isError } =
     useContractInvoke(contractId);
 
@@ -45,7 +45,10 @@ export function ContractInvokeModal({ contractId, isOpen, onClose }: ContractInv
     e.preventDefault();
     if (!callerName) return;
 
-    await invoke('pulse', [callerName]);
+    const invokeResult = await invoke('pulse', [callerName]);
+    if (invokeResult) {
+      triggerBalanceRefresh();
+    }
   };
 
   const handleReadCount = async () => {

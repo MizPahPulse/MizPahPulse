@@ -20,7 +20,7 @@ interface BalanceDisplayProps {
  * Shows loading spinner, error state, and formatted balance.
  */
 export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
-  const { publicKey, isConnected } = useWallet();
+  const { publicKey, isConnected, balanceRefreshKey } = useWallet();
   const [balance, setBalance] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,10 +58,10 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
     }
   }, [publicKey, isConnected]);
 
-  // Fetch on mount and when publicKey changes
+  // Fetch on mount, when publicKey changes, and after transactions
   useEffect(() => {
     fetchBalance();
-  }, [fetchBalance]);
+  }, [fetchBalance, balanceRefreshKey]);
 
   // Poll every 30 seconds
   useEffect(() => {

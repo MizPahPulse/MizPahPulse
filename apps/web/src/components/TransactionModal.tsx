@@ -31,7 +31,7 @@ interface TransactionModalProps {
  * - Error (error message with retry option)
  */
 export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
-  const { publicKey, isConnected } = useWallet();
+  const { publicKey, isConnected, triggerBalanceRefresh } = useWallet();
   const { sendXlm, reset, state, result, error, isSending, isSuccess, isError } = useSendTransaction();
 
   const [destination, setDestination] = useState('');
@@ -42,7 +42,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
     e.preventDefault();
     if (!destination || !amount) return;
 
-    await sendXlm(destination, amount, memo || undefined);
+    const txResult = await sendXlm(destination, amount, memo || undefined);
+    if (txResult) {
+      triggerBalanceRefresh();
+    }
   };
 
   const handleClose = () => {
@@ -65,7 +68,12 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
       />
 
       {/* Modal */}
-      <div className="relative z-10 mx-4 w-full max-w-md animate-slide-up rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
+      <div
+        className="relative z-10 mx-4 w-full max-w-md animate-slide-up rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Send XLM transaction"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -78,8 +86,9 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
             <button
               onClick={handleClose}
               className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+              aria-label="Close send dialog"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -196,26 +205,29 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Destination */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label htmlFor="tx-destination" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                   Destination Address
                 </label>
                 <input
+                  id="tx-destination"
                   type="text"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
                   placeholder="GABC..."
                   required
+                  aria-required="true"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
 
               {/* Amount */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label htmlFor="tx-amount" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                   Amount (XLM)
                 </label>
                 <div className="relative">
                   <input
+                    id="tx-amount"
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -223,9 +235,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
                     min="1"
                     step="0.1"
                     required
+                    aria-required="true"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-14 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400" aria-hidden="true">
                     XLM
                   </span>
                 </div>
@@ -233,10 +246,11 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
 
               {/* Memo (optional) */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label htmlFor="tx-memo" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                   Memo <span className="font-normal text-slate-400">(optional)</span>
                 </label>
                 <input
+                  id="tx-memo"
                   type="text"
                   value={memo}
                   onChange={(e) => setMemo(e.target.value)}
@@ -244,16 +258,17 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
                   maxLength={28}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
-                <p className="mt-1 text-[10px] text-slate-400">{memo.length}/28 characters</p>
+                <p className="mt-1 text-[10px] text-slate-400" aria-live="polite">{memo.length}/28 characters</p>
               </div>
 
               {/* Submit */}
               <button
                 type="submit"
                 disabled={!destination || !amount || !isConnected}
+                aria-label="Send XLM transaction"
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3 text-sm font-bold text-white transition-all hover:shadow-lg hover:shadow-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4" aria-hidden="true" />
                 Send XLM
               </button>
             </form>
