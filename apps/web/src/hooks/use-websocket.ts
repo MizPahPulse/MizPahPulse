@@ -82,8 +82,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       socketRef.current = null;
     };
     // Only reconnect when enabled changes — filters are handled by the second effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [enabled]); // eslint-disable-line
 
   // Re-subscribe when filter arrays change (using stable keys)
   useEffect(() => {
@@ -93,7 +92,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     socket.emit('subscribe:eventTypes', eventTypes);
     socket.emit('subscribe:categories', categories);
     socket.emit('subscribe:accounts', accountIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-line
   }, [eventTypesKey, categoriesKey, accountIdsKey, isConnected]);
 
   const subscribe = useCallback((types: string[]) => {
