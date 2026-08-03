@@ -1,12 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "npx prisma generate --schema=packages/database/prisma/schema.prisma && npx turbo run build --filter=@mizpah-pulse/web",
-  "installCommand": "npm install",
-  "framework": "nextjs",
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "cd ../.. && npx prisma generate --schema=packages/database/prisma/schema.prisma && npx turbo run build --filter=@mizpah-pulse/web",
   "env": {
     "NEXT_PUBLIC_STELLAR_NETWORK": "TESTNET",
-    "NEXT_PUBLIC_PULSE_CONTRACT_ID": "@pulse-contract-id"
+    "NEXT_PUBLIC_PULSE_CONTRACT_ID": "CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C"
   },
   "github": {
     "enabled": true,
