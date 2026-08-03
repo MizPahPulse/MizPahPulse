@@ -84,6 +84,17 @@ export function useSendTransaction() {
         // Load source account from Horizon
         const sourceAccount = await horizon.loadAccount(publicKey);
 
+        // Check sufficient balance (XLM amount + base fee for the transaction)
+        const nativeBalance = sourceAccount.balances.find((b) => b.asset_type === 'native');
+        const currentBalance = nativeBalance ? parseFloat(nativeBalance.balance) : 0;
+        const feeReserve = parseFloat(BASE_FEE) / 10_000_000; // Convert stroops to XLM
+        const minRequired = parsedAmount + feeReserve;
+        if (currentBalance < minRequired) {
+          throw new Error(
+            `Insufficient balance. You have ${currentBalance.toLocaleString()} XLM but need at least ${minRequired.toLocaleString()} XLM (${parsedAmount} XLM + ${feeReserve} XLM fee).`,
+          );
+        }
+
         // Create the payment operation
         const paymentOp = Operation.payment({
           destination,
@@ -128,7 +139,15 @@ export function useSendTransaction() {
         setState('success');
         return txResult;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Transaction failed';
+        let message = err instanceof Error ? err.message : 'Transaction failed';
+
+        // Improve error message for user-cancelled transactions
+        if (message.toLowerCase().includes('user rejected') || message.toLowerCase().includes('declined')) {
+          message = 'Transaction was cancelled. You declined the signing request in Freighter.';
+        } else if (message.toLowerCase().includes('user') && message.toLowerCase().includes('denied')) {
+          message = 'Transaction was cancelled. You denied the request in Freighter.';
+        }
+
         setError(message);
         setState('error');
         return null;
