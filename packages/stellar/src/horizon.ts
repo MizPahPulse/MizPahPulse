@@ -83,7 +83,9 @@ export async function fetchTransactionOperations(hash: string) {
 /**
  * Fetch all assets on the network
  */
-export async function fetchAssets(options?: { limit?: number; cursor?: string }) {
+export async function fetchAssets(
+  options?: { limit?: number; cursor?: string },
+): Promise<Horizon.ServerApi.CollectionPage<Horizon.ServerApi.AssetRecord>> {
   const server = getHorizonServer();
   return server
     .assets()
