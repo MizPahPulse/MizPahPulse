@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import {
-  Networks,
   TransactionBuilder,
   BASE_FEE,
   Horizon,
@@ -13,7 +12,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
-import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
+import { getNetworkConfig, getExplorerTxUrl, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
  * Contract invocation states
@@ -96,7 +95,7 @@ export function useContractInvoke(contractId: string) {
         // Build transaction
         const tx = new TransactionBuilder(sourceAccount, {
           fee: BASE_FEE,
-          networkPassphrase: Networks.TESTNET,
+          networkPassphrase: networkConfig.networkPassphrase,
         })
           .addOperation(callOp)
           .setTimeout(30)
@@ -113,13 +112,17 @@ export function useContractInvoke(contractId: string) {
         // Sign with Freighter
         setState('signing');
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const signedXdr = await signTransaction(assembledTx.toXDR(), { network: 'TESTNET' } as any);
+        const signedXdr = await signTransaction(assembledTx.toXDR(), {
+          networkPassphrase: networkConfig.networkPassphrase,
+        });
 
         // Submit to network
         setState('submitting');
 
-        const signedTx = TransactionBuilder.fromXDR(signedXdr.signedTxXdr, Networks.TESTNET);
+        const signedTx = TransactionBuilder.fromXDR(
+          signedXdr.signedTxXdr,
+          networkConfig.networkPassphrase,
+        );
         const submitResult = await horizon.submitTransaction(signedTx);
 
         // Extract return value if available from the simulation
@@ -134,7 +137,7 @@ export function useContractInvoke(contractId: string) {
 
         const invokeResult: InvokeResult = {
           hash: submitResult.hash,
-          explorerUrl: `https://stellar.expert/explorer/testnet/tx/${submitResult.hash}`,
+          explorerUrl: getExplorerTxUrl(submitResult.hash, networkConfig.network),
           returnValue,
         };
 
@@ -161,15 +164,16 @@ export function useContractInvoke(contractId: string) {
       if (!publicKey) return null;
 
       try {
-        const sorobanRpc = new rpc.Server('https://soroban-rpc.testnet.stellar.org');
-        const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
+        // Use the environment-configured network instead of hardcoded Testnet URLs
+        const sorobanRpc = new rpc.Server(networkConfig.sorobanRpcUrl);
+        const horizon = new Horizon.Server(networkConfig.horizonUrl);
         const contract = new Contract(contractId);
 
         const sourceAccount = await horizon.loadAccount(publicKey);
 
         const tx = new TransactionBuilder(sourceAccount, {
           fee: BASE_FEE,
-          networkPassphrase: Networks.TESTNET,
+          networkPassphrase: networkConfig.networkPassphrase,
         })
           .addOperation(contract.call(functionName))
           .setTimeout(30)
