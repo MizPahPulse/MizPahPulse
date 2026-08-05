@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } },
+  props: { params: Promise<{ id: string }> },
 ) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
@@ -25,7 +25,7 @@ export async function GET(
   if (rateLimitResult) return rateLimitResult;
 
   try {
-    const { id } = params;
+    const { id } = await props.params;
     if (!isValidPublicKey(id)) {
       return errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid Stellar public key');
     }

@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  props: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = params;
+    const { id } = await props.params;
     if (!isValidPublicKey(id)) {
       return errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid Stellar public key');
     }

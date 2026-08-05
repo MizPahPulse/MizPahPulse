@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } },
+  props: { params: Promise<{ id: string }> },
 ) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 60,
@@ -24,7 +24,7 @@ export async function GET(
   if (rateLimitResult) return rateLimitResult;
 
   try {
-    const { id } = params;
+    const { id } = await props.params;
     if (!id || id.length < 10) {
       return errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid contract ID');
     }

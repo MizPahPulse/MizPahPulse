@@ -7,10 +7,10 @@ export const dynamic = 'force-dynamic';
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } },
+  props: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = params;
+    const { id } = await props.params;
     const webhook = await prisma.webhookSubscription.findUnique({ where: { id } });
     if (!webhook) return errorResponse(ErrorCode.NOT_FOUND, 'Webhook not found');
 
