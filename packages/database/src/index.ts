@@ -1,66 +1,61 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: ReturnType<typeof createPrismaClient> | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createPrismaClient() {
+  const base = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 
-// ──────────────────────────────────────────────
-// Audit logging middleware
-// Prisma 6 removed `$use` from the client's public types (deprecated in favor of
-// `$extends`), which broke typechecking. We keep the middleware via a minimal cast
-// — it still works at runtime and avoids a full `$extends` migration.
-// ──────────────────────────────────────────────
-interface AuditMiddlewareParams {
-  model?: string;
-  action: string;
-  args: Record<string, unknown>;
+  // Audit logging via Prisma 6's $extends query extension.
+  // Prisma 6 removed the $use middleware entirely (types AND runtime), so
+  // calling it threw "e.$use is not a function" at module load. $extends is
+  // the supported replacement with identical semantics: track create/update/
+  // delete/upsert on key models without letting audit failures break the
+  // main operation.
+  const auditExtension = Prisma.defineExtension({
+    query: {
+      $allOperations({ model, operation, args, query }) {
+        return query(args).then(async (result) => {
+          if (process.env.NODE_ENV === 'test') return result;
+
+          const auditedModels = ['Event', 'WebhookSubscription', 'MonitoredWallet', 'ApiKey'];
+          if (
+            model &&
+            auditedModels.includes(model) &&
+            ['create', 'update', 'delete', 'upsert'].includes(operation)
+          ) {
+            try {
+              const ctx = Prisma.getExtensionContext(this) as unknown as PrismaClient;
+              await ctx.auditLog.create({
+                data: {
+                  action: `DB_${operation.toUpperCase()}`,
+                  resource: model,
+                  resourceId: (result as { id?: string })?.id,
+                  details: {
+                    model,
+                    operation,
+                    timestamp: new Date().toISOString(),
+                  },
+                },
+              });
+            } catch {
+              // Don't let audit failure break the main operation
+            }
+          }
+
+          return result;
+        });
+      },
+    },
+  });
+
+  return base.$extends(auditExtension);
 }
 
-type AuditMiddleware = (
-  params: AuditMiddlewareParams,
-  next: (params: AuditMiddlewareParams) => Promise<unknown>,
-) => Promise<unknown>;
-
-const auditMiddleware: AuditMiddleware = async (params, next) => {
-  const result = await next(params);
-
-  // Only log in non-test environments for performance
-  if (process.env.NODE_ENV === 'test') return result;
-
-  // Log create/update/delete on key models
-  const auditedModels = ['Event', 'WebhookSubscription', 'MonitoredWallet', 'ApiKey'];
-  if (
-    auditedModels.includes(params.model || '') &&
-    ['create', 'update', 'delete', 'upsert'].includes(params.action)
-  ) {
-    try {
-      await prisma.auditLog.create({
-        data: {
-          action: `DB_${params.action.toUpperCase()}`,
-          resource: params.model || 'unknown',
-          resourceId: (result as { id?: string })?.id,
-          details: {
-            model: params.model,
-            action: params.action,
-            timestamp: new Date().toISOString(),
-          },
-        },
-      });
-    } catch {
-      // Don't let audit failure break the main operation
-    }
-  }
-
-  return result;
-};
-
-(prisma as unknown as { $use: (mw: AuditMiddleware) => void }).$use(auditMiddleware);
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
