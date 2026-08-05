@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { parsePagination, buildPaginationArgs, paginatedResponse } from '@/lib/pagination';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,48 +10,55 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/v1/contracts/[id]/events
  *
- * Fetch paginated events for a specific Soroban contract.
+ * Fetch events for a specific contract with pagination and filtering.
  */
-export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
-
-  const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-  const cursor = searchParams.get('cursor') || undefined;
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } },
+) {
+  const rateLimitResult = await rateLimit(request, {
+    maxRequests: 60,
+    windowMs: 60_000,
+    keyPrefix: 'contract-events',
+  });
+  if (rateLimitResult) return rateLimitResult;
 
   try {
+    const { id } = params;
+    if (!id || id.length < 10) {
+      return errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid contract ID');
+    }
+
+    const { searchParams } = new URL(request.url);
+    const pagination = parsePagination(searchParams);
+
+    const where: Record<string, unknown> = { contractId: id };
+    const eventTypes = searchParams.getAll('eventType');
+    if (eventTypes.length > 0) {
+      where.eventType = { in: eventTypes };
+    }
+
+    const args = buildPaginationArgs(where, pagination);
     const [events, total] = await Promise.all([
-      prisma.event.findMany({
-        where: { contractId: id },
-        orderBy: { timestamp: 'desc' },
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      }),
-      prisma.event.count({ where: { contractId: id } }),
+      prisma.event.findMany(args),
+      prisma.event.count({ where }),
     ]);
 
-    const hasMore = events.length > limit;
-    const data = hasMore ? events.slice(0, limit) : events;
+    const result = paginatedResponse(events as Array<{ id: string } & typeof events[0]>, total, pagination);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        events: data.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-          ...e,
-          ledgerSequence: e.ledgerSequence.toString(),
-        })),
-        total,
-        limit,
-        cursor: hasMore ? data[data.length - 1]?.id : undefined,
-        hasMore,
-      },
-      meta: { timestamp: new Date().toISOString(), version: 'v1' },
+    return successResponse({
+      contractId: id,
+      ...result,
+      events: result.data.map((e) => ({
+        ...e,
+        ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),
+        payload: typeof (e as unknown as { payload: unknown }).payload === 'string'
+          ? JSON.parse((e as unknown as { payload: string }).payload)
+          : (e as unknown as { payload: unknown }).payload,
+      })),
     });
   } catch (error) {
     console.error('[API] Contract events error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch contract events' } },
-      { status: 500 },
-    );
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch contract events');
   }
 }

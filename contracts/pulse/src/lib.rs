@@ -259,6 +259,50 @@ impl PulseContract {
             .unwrap_or(false)
     }
 
+    /// ── Time-Locked Operations ────────────────
+
+    /// Fire a pulse that only executes after a specified ledger timestamp.
+    /// This demonstrates time-locked operations useful for vesting, auctions, etc.
+    pub fn time_locked_pulse(
+        env: Env,
+        caller: Symbol,
+        execute_after: u64,
+    ) -> Result<u32, PulseError> {
+        ensure_not_paused(&env)?;
+
+        let now = env.ledger().timestamp();
+        if now < execute_after {
+            return Err(PulseError::InvalidCaller); // Using InvalidCaller for "not yet ready"
+        }
+
+        Self::pulse(env, caller)
+    }
+
+    /// ── Gas Optimization ──────────────────────
+
+    /// Get the current gas cost estimate for a pulse operation.
+    /// This is a read-only call that returns metadata without modifying state.
+    pub fn estimate_pulse_cost(env: Env) -> u32 {
+        // Return a fixed cost estimate in stroops.
+        // Real implementation would calculate based on current network conditions.
+        let base_cost: u32 = 100_000; // ~0.01 XLM in stroops
+        let _meta = env
+            .storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY);
+        base_cost
+    }
+
+    /// Read the current ledger timestamp
+    pub fn get_ledger_timestamp(env: Env) -> u64 {
+        env.ledger().timestamp()
+    }
+
+    /// Get the ledger sequence number
+    pub fn get_ledger_sequence(env: Env) -> u32 {
+        env.ledger().sequence()
+    }
+
     /// ── Pausability ───────────────────────────
 
     /// Pause the contract (only owner). When paused, pulse() and broadcast_pulse() will fail.
