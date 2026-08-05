@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, cn, Spinner } from '@mizpah-pulse/ui';
 import { Activity, ArrowLeftRight, FileCode, Send, TrendingUp, Wallet } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
+import { apiFetch } from '@/lib/api-client';
 
 interface RecentActivityItem {
   id: string;
@@ -73,28 +74,50 @@ const statusColors: Record<string, string> = {
   warning: 'bg-amber-400',
 };
 
+type DataSource = 'loading' | 'live' | 'sample';
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(FALLBACK_STATS);
-  const [loading, setLoading] = useState(true);
+  const [dataSource, setDataSource] = useState<DataSource>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Load real stats from the API, falling back to sample data if unavailable
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/v1/stats')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (!cancelled && body?.data) setStats(body.data as DashboardStats);
-      })
-      .catch(() => {
-        // API unavailable (no DB) — keep fallback sample data
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const loadStats = useCallback(async () => {
+    setDataSource('loading');
+    setLoadError(null);
+    try {
+      const data = await apiFetch<DashboardStats>('/api/v1/stats');
+      setStats(data);
+      setDataSource('live');
+    } catch (err) {
+      // API unavailable (no DB / not running) — keep fallback sample data
+      // but surface that the numbers are illustrative, not live.
+      setDataSource('sample');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load stats');
+    }
   }, []);
+
+  // Load real stats from the API, falling back to sample data if unavailable.
+  useEffect(() => {
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const data = await apiFetch<DashboardStats>('/api/v1/stats', {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setStats(data);
+        setDataSource('live');
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setDataSource('sample');
+        setLoadError(err instanceof Error ? err.message : 'Failed to load stats');
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, []);
+
+  const loading = dataSource === 'loading';
 
   const statCards = [
     {
@@ -126,11 +149,39 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Real-time overview of Stellar network activity
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Real-time overview of Stellar network activity
+          </p>
+        </div>
+        {dataSource === 'sample' && (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+          >
+            <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
+            Showing sample data — live API unavailable
+            <button
+              onClick={() => {
+                void loadStats();
+              }}
+              className="ml-1 font-semibold underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {dataSource === 'live' && (
+          <span
+            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+            role="status"
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+            Live from API
+          </span>
+        )}
       </div>
 
       {/* Stats Grid */}
@@ -146,7 +197,7 @@ export default function DashboardPage() {
                   {loading ? <Spinner size="sm" /> : stat.value}
                 </p>
                 <p className="text-xs font-medium text-slate-400">
-                  {loading ? 'Loading…' : 'Live from API'}
+                  {loading ? 'Loading…' : dataSource === 'live' ? 'Live from API' : 'Sample data'}
                 </p>
               </div>
               <div className={cn('rounded-xl p-2.5', stat.color)}>
