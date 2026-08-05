@@ -1,32 +1,23 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { successResponse, errorResponse, ErrorCode } from '@/lib/api-errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * DELETE /api/v1/webhooks/[id]
- *
- * Delete a registered webhook subscription.
- */
-export async function DELETE(request: Request, props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
-
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { id: string } },
+) {
   try {
-    await prisma.webhookSubscription.delete({
-      where: { id },
-    });
+    const { id } = params;
+    const webhook = await prisma.webhookSubscription.findUnique({ where: { id } });
+    if (!webhook) return errorResponse(ErrorCode.NOT_FOUND, 'Webhook not found');
 
-    return NextResponse.json({
-      success: true,
-      data: { deleted: id },
-      meta: { timestamp: new Date().toISOString(), version: 'v1' },
-    });
+    await prisma.webhookSubscription.delete({ where: { id } });
+    return successResponse({ deleted: true, id });
   } catch (error) {
     console.error('[API] Webhook delete error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } },
-      { status: 404 },
-    );
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to delete webhook');
   }
 }
