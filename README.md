@@ -9,7 +9,7 @@
   <a href="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml"><img src="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg" alt="CI/CD" /></a>
   <a href="https://mizpah-pulse.vercel.app"><img src="https://img.shields.io/badge/demo-live-22c55e?style=flat&logo=vercel" alt="Live Demo" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="#tests"><img src="https://img.shields.io/badge/tests-18%2F18%20passed-brightgreen" alt="Tests: 18/18" /></a>
+  <a href="#tests"><img src="https://img.shields.io/badge/tests-55%2F55%20passed-brightgreen" alt="Tests: 55/55" /></a>
   <img src="https://img.shields.io/badge/next.js-15-black?logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/stellar-testnet-7B5BDB?logo=stellar" alt="Stellar Testnet" />
   <img src="https://img.shields.io/badge/soroban-deployed-7B5BDB?logo=stellar" alt="Soroban Deployed" />
@@ -292,22 +292,23 @@ MizpahPulse tracks **35+ event types** across 6 categories:
 ## 🧪 Testing
 
 ```bash
-# Frontend tests (12 passing)
+# Frontend tests (28 passing)
 cd apps/web && npx vitest run
 
-# Smart contract tests (6 passing)
+# Smart contract tests (27 passing)
 cd contracts && cargo test
 ```
 
 ### Test Suite
 
 ```
-✓ PulseContract tests        6 passed  (counter, events, inter-contract)
-✓ useFreighter tests         6 passed  (connect, disconnect, error states)
-✓ useSendTransaction tests   3 passed  (validation, wallet not connected)
-✓ useContractInvoke tests    3 passed  (validation, contract ID, initial state)
+✓ PulseContract tests        27 passed  (ownership, pausability, rate limit, batch ops, upgrade, time-lock…)
+✓ useFreighter tests          6 passed  (connect, disconnect, error states)
+✓ useSendTransaction tests    3 passed  (validation, wallet not connected)
+✓ contract invoke tests       3 passed  (validation, contract ID, initial state)
+✓ utility unit tests         16 passed  (date, number, validators, display, error handling)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Total: 18/18 passing
+  Total: 55/55 passing
 ```
 
 ---
