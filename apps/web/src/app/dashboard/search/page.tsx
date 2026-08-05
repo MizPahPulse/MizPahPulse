@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, cn, EmptyState, Spinner, Badge } from '@mizpah-pulse/ui';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 import { Search, Hash, Wallet, FileCode, Coins } from 'lucide-react';
 
 interface SearchResult {
@@ -18,6 +19,17 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Global ⌘K / Ctrl+K shortcut — focus the search box from anywhere
+  const focusSearch = useCallback(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  useKeyboardShortcut([
+    { key: 'k', ctrl: true, handler: focusSearch },
+    { key: 'k', meta: true, handler: focusSearch },
+  ]);
 
   useEffect(() => {
     if (debouncedQuery.length < 2) {
@@ -71,13 +83,17 @@ export default function SearchPage() {
         <div className="relative">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by address, tx hash, contract ID, or asset..."
-            className="w-full rounded-xl border border-slate-200 bg-white py-4 pl-12 pr-4 text-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+            className="w-full rounded-xl border border-slate-200 bg-white py-4 pl-12 pr-16 text-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             autoFocus
           />
+          <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
+            ⌘K
+          </kbd>
           {loading && (
             <div className="absolute right-4 top-1/2 -translate-y-1/2">
               <Spinner size="sm" />
