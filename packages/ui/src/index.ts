@@ -13,3 +13,7 @@ export * from './status-dot';
 export * from './toast';
 export * from './error-boundary';
 export * from './skeleton';
+export * from './tooltip';
+export * from './avatar';
+export * from './dialog';
+export * from './progress';

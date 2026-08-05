@@ -3,6 +3,7 @@ import { getNetworkConfig, createHorizonServer, getSorobanRpc, categorizeEventTy
 import { prisma } from '@mizpah-pulse/database';
 import { Horizon } from '@stellar/stellar-sdk';
 import { v4 as uuidv4 } from 'uuid';
+import { startWebhookWorker } from './webhook-worker';
 import type { RawStellarEvent } from '@mizpah-pulse/types';
 
 /**
@@ -294,9 +295,13 @@ async function main() {
 
   console.log('[Ingester] Event ingestion engine is running');
 
+  // Start webhook delivery worker
+  const stopWebhookWorker = startWebhookWorker();
+
   // Graceful shutdown
   const shutdown = async () => {
     console.log('[Ingester] Shutting down...');
+    stopWebhookWorker();
     activeTimers.forEach((t) => clearInterval(t));
     await pubClient?.quit();
     await rawEventQueue.close();
