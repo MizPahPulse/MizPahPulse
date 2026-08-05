@@ -34,6 +34,10 @@ export function useFreighter() {
     return !!(window as unknown as Record<string, unknown>).freighterApi;
   }, []);
 
+  // Lazily compute the installed flag once; the extension state cannot change
+  // during a page session, so recomputing it on every render was wasted work.
+  const [installed] = useState<boolean>(() => isFreighterInstalled());
+
   /**
    * Detect Freighter availability and auto-reconnect if previously connected
    */
@@ -41,7 +45,7 @@ export function useFreighter() {
     // Only run on client
     if (typeof window === 'undefined') return;
 
-    if (!isFreighterInstalled()) {
+    if (!installed) {
       setState('disconnected');
       return;
     }
@@ -76,7 +80,7 @@ export function useFreighter() {
 
     try {
       // Check if Freighter is installed
-      if (!isFreighterInstalled()) {
+      if (!installed) {
         const msg =
           'Freighter wallet extension is not installed. Please install Freighter from https://freighter.app';
         setError(msg);
@@ -121,7 +125,7 @@ export function useFreighter() {
    * Refresh the public key (useful after reconnection)
    */
   const refresh = useCallback(async (): Promise<string | null> => {
-    if (!isFreighterInstalled()) return null;
+    if (!installed) return null;
 
     try {
       const pk = (await getAddress()).address;
@@ -142,6 +146,6 @@ export function useFreighter() {
     isConnecting: state === 'connecting',
     state,
     error,
-    isFreighterInstalled: isFreighterInstalled(),
+    isFreighterInstalled: installed,
   };
 }
