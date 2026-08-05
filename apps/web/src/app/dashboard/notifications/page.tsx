@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Card, CardContent, Badge, cn, EmptyState } from '@mizpah-pulse/ui';
+import React, { useEffect, useState } from 'react';
+import { Card, CardContent, Badge, cn, EmptyState, Skeleton } from '@mizpah-pulse/ui';
 import { Bell, BellOff, CheckCheck, Settings, X } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
+import { apiFetch } from '@/lib/api-client';
+import { truncateAddress } from '@/lib/display-utils';
 
 interface Notification {
   id: string;
@@ -57,8 +59,57 @@ const INITIAL_NOTIFICATIONS: Notification[] = [
   },
 ];
 
+interface EventItem {
+  id: string;
+  eventType: string;
+  category: string;
+  timestamp: string;
+  accountId?: string | null;
+}
+
+/** Build a human-readable notification from a stored event. */
+function eventToNotification(event: EventItem, index: number): Notification {
+  const type = event.category || 'EVENT';
+  const title = event.eventType.replace(/_/g, ' ');
+  const account = event.accountId ? truncateAddress(event.accountId) : 'unknown account';
+  return {
+    id: `evt-${event.id}`,
+    title,
+    desc: `${type.toLowerCase()} activity from ${account}`,
+    timestamp: new Date(event.timestamp).getTime(),
+    read: index >= 5, // Most recent items are unread; older ones read
+    type,
+  };
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [dataSource, setDataSource] = useState<'loading' | 'live' | 'sample'>('loading');
+
+  // Load recent events from the API so the inbox reflects real on-chain activity.
+  useEffect(() => {
+    const controller = new AbortController();
+    apiFetch<{ events: EventItem[] }>('/api/v1/events?limit=20', {
+      signal: controller.signal,
+    })
+      .then((body) => {
+        if (controller.signal.aborted) return;
+        const events = body.events ?? [];
+        if (events.length > 0) {
+          setNotifications(events.map(eventToNotification));
+          setDataSource('live');
+        } else {
+          setDataSource('live');
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setDataSource('sample');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDataSource((d) => (d === 'loading' ? 'sample' : d));
+      });
+    return () => controller.abort();
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -80,7 +131,14 @@ export default function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Notifications</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {unreadCount} unread notifications
+            {dataSource === 'loading' ? (
+              <Skeleton className="h-4 w-32" />
+            ) : (
+              <>
+                {unreadCount} unread notifications ·{' '}
+                {dataSource === 'live' ? 'Live from API' : 'sample data'}
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
