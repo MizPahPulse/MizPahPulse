@@ -1,6 +1,13 @@
 import { Queue, Worker } from 'bullmq';
 import Redis from 'ioredis';
-import { getNetworkConfig, createHorizonServer, getSorobanRpc, categorizeEventType, mapToEventType, normalizeEventPayload } from '@mizpah-pulse/stellar';
+import {
+  getNetworkConfig,
+  createHorizonServer,
+  getSorobanRpc,
+  categorizeEventType,
+  mapToEventType,
+  normalizeEventPayload,
+} from '@mizpah-pulse/stellar';
 import { prisma, Prisma } from '@mizpah-pulse/database';
 import { v4 as uuidv4 } from 'uuid';
 import { startWebhookWorker } from './webhook-worker';
@@ -143,7 +150,9 @@ async function startSorobanPolling() {
           lastLedger = maxLedger;
         }
 
-        console.log(`[Ingester] Polled ${response.events.length} Soroban events, ledger: ${lastLedger}`);
+        console.log(
+          `[Ingester] Polled ${response.events.length} Soroban events, ledger: ${lastLedger}`,
+        );
       }
     } catch (err) {
       console.error('[Ingester] Soroban polling error:', err);
@@ -175,10 +184,10 @@ const eventProcessor = new Worker<RawStellarEvent>(
         }
       }
 
-  // Parse and normalize the event
-        const category = categorizeEventType(rawEvent.type);
-        const eventType = mapToEventType(rawEvent.type);
-        const normalizedPayload = normalizeEventPayload(rawEvent.payload);
+      // Parse and normalize the event
+      const category = categorizeEventType(rawEvent.type);
+      const eventType = mapToEventType(rawEvent.type);
+      const normalizedPayload = normalizeEventPayload(rawEvent.payload);
 
       // Store processed event
       const stored = await prisma.event.create({

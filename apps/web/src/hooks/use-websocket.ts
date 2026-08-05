@@ -27,7 +27,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<unknown>(null);
-  const [connectionStats, setConnectionStats] = useState<UseWebSocketReturn['connectionStats']>(null);
+  const [connectionStats, setConnectionStats] =
+    useState<UseWebSocketReturn['connectionStats']>(null);
 
   // Stable keys to avoid re-subscription loops from new array references
   const eventTypesKey = useMemo(() => eventTypes.join(','), [eventTypes]);

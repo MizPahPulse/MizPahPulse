@@ -59,10 +59,7 @@ export function TableRowSkeleton({ cols = 4 }: { cols?: number }) {
   return (
     <div className="flex items-center gap-4 px-4 py-3">
       {Array.from({ length: cols }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className={cn('h-4', i === 0 ? 'flex-1' : 'w-24')}
-        />
+        <Skeleton key={i} className={cn('h-4', i === 0 ? 'flex-1' : 'w-24')} />
       ))}
     </div>
   );

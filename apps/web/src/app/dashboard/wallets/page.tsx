@@ -4,7 +4,15 @@ import React, { useState, useCallback } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { BalanceDisplay } from '@/components/BalanceDisplay';
 import { TransactionModal } from '@/components/TransactionModal';
-import { Card, cn, TruncatedKey, SearchInput, StatusDot, EmptyState, Spinner } from '@mizpah-pulse/ui';
+import {
+  Card,
+  cn,
+  TruncatedKey,
+  SearchInput,
+  StatusDot,
+  EmptyState,
+  Spinner,
+} from '@mizpah-pulse/ui';
 import {
   Wallet,
   Plus,
@@ -96,7 +104,10 @@ export default function WalletsPage() {
 
       {/* Freighter not installed warning */}
       {!isFreighterInstalled && (
-        <Card padding="md" className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+        <Card
+          padding="md"
+          className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+        >
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             <div>
@@ -139,12 +150,12 @@ export default function WalletsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card padding="md">
           <div className="text-center">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Connection Status</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Connection Status
+            </p>
             <div className="mt-1 flex items-center justify-center gap-2">
               <StatusDot
-                status={
-                  isConnected ? 'online' : isConnecting ? 'syncing' : 'offline'
-                }
+                status={isConnected ? 'online' : isConnecting ? 'syncing' : 'offline'}
                 pulse={isConnected}
               />
               <span className="text-lg font-bold capitalize text-slate-900 dark:text-slate-100">
@@ -199,12 +210,7 @@ export default function WalletsPage() {
                   </span>
                   <StatusDot status="online" />
                 </div>
-                <TruncatedKey
-                  publicKey={publicKey}
-                  prefix={10}
-                  suffix={6}
-                  className="text-sm"
-                />
+                <TruncatedKey publicKey={publicKey} prefix={10} suffix={6} className="text-sm" />
               </div>
               <div className="flex items-center gap-1">
                 <button

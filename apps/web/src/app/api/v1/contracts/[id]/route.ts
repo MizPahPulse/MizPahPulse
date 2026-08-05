@@ -15,7 +15,10 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
   if (!isValidContractId(id)) {
     return NextResponse.json(
-      { success: false, error: { code: 'INVALID_CONTRACT', message: 'Invalid Stellar contract ID' } },
+      {
+        success: false,
+        error: { code: 'INVALID_CONTRACT', message: 'Invalid Stellar contract ID' },
+      },
       { status: 400 },
     );
   }
@@ -40,14 +43,17 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       stats: {
         totalInvocations,
         failedInvocations,
-        successRate: totalInvocations > 0
-          ? ((totalInvocations - failedInvocations) / totalInvocations * 100).toFixed(1) + '%'
-          : 'N/A',
+        successRate:
+          totalInvocations > 0
+            ? (((totalInvocations - failedInvocations) / totalInvocations) * 100).toFixed(1) + '%'
+            : 'N/A',
       },
-      recentEvents: recentEvents.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-        ...e,
-        ledgerSequence: e.ledgerSequence.toString(),
-      })),
+      recentEvents: recentEvents.map(
+        (e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
+          ...e,
+          ledgerSequence: e.ledgerSequence.toString(),
+        }),
+      ),
     };
 
     return NextResponse.json({
@@ -58,7 +64,10 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
   } catch (error) {
     console.error('[API] Contract error:', error);
     return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch contract details' } },
+      {
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch contract details' },
+      },
       { status: 500 },
     );
   }

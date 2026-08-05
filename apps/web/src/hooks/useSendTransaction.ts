@@ -17,7 +17,8 @@ import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
 /**
  * Transaction sending state
  */
-export type SendTransactionState = 'idle' | 'building' | 'signing' | 'submitting' | 'success' | 'error';
+export type SendTransactionState =
+  'idle' | 'building' | 'signing' | 'submitting' | 'success' | 'error';
 
 /**
  * Transaction result returned after a successful send
@@ -61,7 +62,11 @@ export function useSendTransaction() {
    * @returns TransactionResult on success, null on failure
    */
   const sendXlm = useCallback(
-    async (destination: string, amount: string, memo?: string): Promise<TransactionResult | null> => {
+    async (
+      destination: string,
+      amount: string,
+      memo?: string,
+    ): Promise<TransactionResult | null> => {
       // Reset state
       setState('building');
       setResult(null);
@@ -75,7 +80,9 @@ export function useSendTransaction() {
 
         // Validate destination
         if (!destination || destination.length !== 56 || !destination.startsWith('G')) {
-          throw new Error('Invalid destination address. Must be a valid Stellar public key starting with "G".');
+          throw new Error(
+            'Invalid destination address. Must be a valid Stellar public key starting with "G".',
+          );
         }
 
         // Validate amount
@@ -148,9 +155,15 @@ export function useSendTransaction() {
         let message = err instanceof Error ? err.message : 'Transaction failed';
 
         // Improve error message for user-cancelled transactions
-        if (message.toLowerCase().includes('user rejected') || message.toLowerCase().includes('declined')) {
+        if (
+          message.toLowerCase().includes('user rejected') ||
+          message.toLowerCase().includes('declined')
+        ) {
           message = 'Transaction was cancelled. You declined the signing request in Freighter.';
-        } else if (message.toLowerCase().includes('user') && message.toLowerCase().includes('denied')) {
+        } else if (
+          message.toLowerCase().includes('user') &&
+          message.toLowerCase().includes('denied')
+        ) {
           message = 'Transaction was cancelled. You denied the request in Freighter.';
         }
 

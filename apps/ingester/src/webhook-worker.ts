@@ -55,7 +55,9 @@ async function getPendingDeliveries(): Promise<PendingDelivery[]> {
 /**
  * Attempt to deliver a webhook payload to the subscriber's endpoint.
  */
-async function deliverWebhook(delivery: PendingDelivery): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+async function deliverWebhook(
+  delivery: PendingDelivery,
+): Promise<{ success: boolean; statusCode?: number; error?: string }> {
   const body = JSON.stringify(delivery.payload);
   const signature = signWebhookPayload(body, delivery.secret);
 
@@ -92,7 +94,11 @@ async function deliverWebhook(delivery: PendingDelivery): Promise<{ success: boo
 /**
  * Process all pending webhook deliveries.
  */
-export async function processWebhookDeliveries(): Promise<{ processed: number; succeeded: number; failed: number }> {
+export async function processWebhookDeliveries(): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+}> {
   const deliveries = await getPendingDeliveries();
   let succeeded = 0;
   let failed = 0;

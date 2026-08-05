@@ -4,14 +4,7 @@ import React, { useState, type FormEvent } from 'react';
 import { useSendTransaction } from '@/hooks/useSendTransaction';
 import { useWallet } from '@/context/WalletContext';
 import { cn } from '@mizpah-pulse/ui';
-import {
-  Send,
-  X,
-  CheckCircle,
-  AlertTriangle,
-  ExternalLink,
-  Loader2,
-} from 'lucide-react';
+import { Send, X, CheckCircle, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 
 interface TransactionModalProps {
   /** Whether the modal is open */
@@ -32,7 +25,8 @@ interface TransactionModalProps {
  */
 export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
   const { publicKey, isConnected, triggerBalanceRefresh } = useWallet();
-  const { sendXlm, reset, state, result, error, isSending, isSuccess, isError } = useSendTransaction();
+  const { sendXlm, reset, state, result, error, isSending, isSuccess, isError } =
+    useSendTransaction();
 
   const [destination, setDestination] = useState('');
   const [amount, setAmount] = useState('');
@@ -164,9 +158,7 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
                 <h3 className="mt-4 text-lg font-bold text-red-700 dark:text-red-400">
                   Transaction Failed
                 </h3>
-                <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
-                  {error}
-                </p>
+                <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">{error}</p>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -205,7 +197,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Destination */}
               <div>
-                <label htmlFor="tx-destination" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label
+                  htmlFor="tx-destination"
+                  className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400"
+                >
                   Destination Address
                 </label>
                 <input
@@ -222,7 +217,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
 
               {/* Amount */}
               <div>
-                <label htmlFor="tx-amount" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label
+                  htmlFor="tx-amount"
+                  className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400"
+                >
                   Amount (XLM)
                 </label>
                 <div className="relative">
@@ -238,7 +236,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
                     aria-required="true"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-14 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400" aria-hidden="true">
+                  <span
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400"
+                    aria-hidden="true"
+                  >
                     XLM
                   </span>
                 </div>
@@ -246,7 +247,10 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
 
               {/* Memo (optional) */}
               <div>
-                <label htmlFor="tx-memo" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                <label
+                  htmlFor="tx-memo"
+                  className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400"
+                >
                   Memo <span className="font-normal text-slate-400">(optional)</span>
                 </label>
                 <input
@@ -258,7 +262,9 @@ export function TransactionModal({ isOpen, onClose }: TransactionModalProps) {
                   maxLength={28}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
-                <p className="mt-1 text-[10px] text-slate-400" aria-live="polite">{memo.length}/28 characters</p>
+                <p className="mt-1 text-[10px] text-slate-400" aria-live="polite">
+                  {memo.length}/28 characters
+                </p>
               </div>
 
               {/* Submit */}

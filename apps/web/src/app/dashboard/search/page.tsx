@@ -8,9 +8,19 @@ import { Search, Hash, Wallet, FileCode, Coins } from 'lucide-react';
 
 interface SearchResult {
   transactions?: Array<{ hash: string; found: boolean; eventType?: string; timestamp?: string }>;
-  accounts?: Array<{ publicKey: string; eventCount: number; recentEvents: Array<{ id: string; eventType: string; timestamp: string }> }>;
+  accounts?: Array<{
+    publicKey: string;
+    eventCount: number;
+    recentEvents: Array<{ id: string; eventType: string; timestamp: string }>;
+  }>;
   contracts?: Array<{ contractId: string; eventCount: number; recentEvents: number }>;
-  events?: Array<{ id: string; eventType: string; category: string; timestamp: string; accountId?: string }>;
+  events?: Array<{
+    id: string;
+    eventType: string;
+    category: string;
+    timestamp: string;
+    accountId?: string;
+  }>;
 }
 
 export default function SearchPage() {
@@ -107,7 +117,9 @@ export default function SearchPage() {
               <div className="flex items-center gap-3">
                 <type.icon className="h-5 w-5 text-indigo-500" />
                 <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{type.label}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {type.label}
+                  </p>
                   <p className="text-xs text-slate-400">{type.placeholder}</p>
                 </div>
               </div>
@@ -119,7 +131,10 @@ export default function SearchPage() {
         {query.length >= 2 && (
           <div className="mt-6 space-y-4">
             {error && (
-              <Card padding="md" className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+              <Card
+                padding="md"
+                className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950"
+              >
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </Card>
             )}
@@ -140,11 +155,11 @@ export default function SearchPage() {
                     <p className="font-mono text-sm text-slate-900 dark:text-slate-100">
                       {account.publicKey.slice(0, 12)}...{account.publicKey.slice(-8)}
                     </p>
-                    <p className="text-xs text-slate-400">
-                      {account.eventCount} events found
-                    </p>
+                    <p className="text-xs text-slate-400">{account.eventCount} events found</p>
                   </div>
-                  <Badge variant="info" size="sm">Account</Badge>
+                  <Badge variant="info" size="sm">
+                    Account
+                  </Badge>
                 </div>
               </Card>
             ))}
@@ -159,7 +174,9 @@ export default function SearchPage() {
                     </p>
                     <p className="text-xs text-slate-400">{tx.eventType || 'Transaction'}</p>
                   </div>
-                  <Badge variant="success" size="sm">TX</Badge>
+                  <Badge variant="success" size="sm">
+                    TX
+                  </Badge>
                 </div>
               </Card>
             ))}
@@ -174,7 +191,9 @@ export default function SearchPage() {
                     </p>
                     <p className="text-xs text-slate-400">{contract.eventCount} events</p>
                   </div>
-                  <Badge variant="purple" size="sm">Contract</Badge>
+                  <Badge variant="purple" size="sm">
+                    Contract
+                  </Badge>
                 </div>
               </Card>
             ))}
@@ -194,7 +213,9 @@ export default function SearchPage() {
                       · {new Date(event.timestamp).toLocaleString()}
                     </p>
                   </div>
-                  <Badge variant="default" size="sm">{event.category}</Badge>
+                  <Badge variant="default" size="sm">
+                    {event.category}
+                  </Badge>
                 </div>
               </Card>
             ))}

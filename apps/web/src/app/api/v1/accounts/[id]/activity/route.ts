@@ -13,10 +13,7 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch activity summary and recent events for a Stellar account.
  */
-export async function GET(
-  request: Request,
-  props: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
     windowMs: 60_000,

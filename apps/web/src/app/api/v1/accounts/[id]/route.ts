@@ -6,10 +6,7 @@ import { isValidPublicKey } from '@mizpah-pulse/stellar';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  _request: Request,
-  props: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: Request, props: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await props.params;
     if (!isValidPublicKey(id)) {

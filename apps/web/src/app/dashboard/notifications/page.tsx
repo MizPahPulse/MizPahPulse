@@ -15,11 +15,46 @@ interface Notification {
 }
 
 const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: '1', title: 'Payment Received', desc: 'GABC...XYZ received 500 XLM', timestamp: Date.now() - 2 * 60_000, read: false, type: 'PAYMENT' },
-  { id: '2', title: 'Contract Invocation', desc: 'swap() called on Aqua DEX Router', timestamp: Date.now() - 5 * 60_000, read: false, type: 'CONTRACT' },
-  { id: '3', title: 'Token Transfer', desc: '1,000 USDC sent to GDEF...UVW', timestamp: Date.now() - 15 * 60_000, read: true, type: 'TOKEN' },
-  { id: '4', title: 'DEX Trade', desc: 'Trade executed: 500 XLM → 5,000 USDC', timestamp: Date.now() - 60 * 60_000, read: true, type: 'DEX' },
-  { id: '5', title: 'NFT Transfer', desc: 'NFT #5678 transferred to GKLM...NOP', timestamp: Date.now() - 2 * 60 * 60_000, read: true, type: 'NFT' },
+  {
+    id: '1',
+    title: 'Payment Received',
+    desc: 'GABC...XYZ received 500 XLM',
+    timestamp: Date.now() - 2 * 60_000,
+    read: false,
+    type: 'PAYMENT',
+  },
+  {
+    id: '2',
+    title: 'Contract Invocation',
+    desc: 'swap() called on Aqua DEX Router',
+    timestamp: Date.now() - 5 * 60_000,
+    read: false,
+    type: 'CONTRACT',
+  },
+  {
+    id: '3',
+    title: 'Token Transfer',
+    desc: '1,000 USDC sent to GDEF...UVW',
+    timestamp: Date.now() - 15 * 60_000,
+    read: true,
+    type: 'TOKEN',
+  },
+  {
+    id: '4',
+    title: 'DEX Trade',
+    desc: 'Trade executed: 500 XLM → 5,000 USDC',
+    timestamp: Date.now() - 60 * 60_000,
+    read: true,
+    type: 'DEX',
+  },
+  {
+    id: '5',
+    title: 'NFT Transfer',
+    desc: 'NFT #5678 transferred to GKLM...NOP',
+    timestamp: Date.now() - 2 * 60 * 60_000,
+    read: true,
+    type: 'NFT',
+  },
 ];
 
 export default function NotificationsPage() {
@@ -32,9 +67,7 @@ export default function NotificationsPage() {
   };
 
   const toggleRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n)),
-    );
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n)));
   };
 
   const dismiss = (id: string) => {
@@ -100,15 +133,26 @@ export default function NotificationsPage() {
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={cn('text-sm font-semibold', !notif.read ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400')}>
+                    <span
+                      className={cn(
+                        'text-sm font-semibold',
+                        !notif.read
+                          ? 'text-slate-900 dark:text-slate-100'
+                          : 'text-slate-500 dark:text-slate-400',
+                      )}
+                    >
                       {notif.title}
                     </span>
-                    <Badge variant="default" size="sm">{notif.type}</Badge>
+                    <Badge variant="default" size="sm">
+                      {notif.type}
+                    </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{notif.desc}</p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
-                  <span className="text-xs text-slate-400">{formatTimeAgo(new Date(notif.timestamp))}</span>
+                  <span className="text-xs text-slate-400">
+                    {formatTimeAgo(new Date(notif.timestamp))}
+                  </span>
                   <button
                     onClick={() => dismiss(notif.id)}
                     className="rounded-lg p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500 dark:text-slate-600 dark:hover:bg-slate-800"

@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, Badge, cn, SearchInput, StatusDot, EmptyState, Spinner } from '@mizpah-pulse/ui';
+import {
+  Card,
+  CardContent,
+  Badge,
+  cn,
+  SearchInput,
+  StatusDot,
+  EmptyState,
+  Spinner,
+} from '@mizpah-pulse/ui';
 import { ContractInvokeModal } from '@/components/ContractInvokeModal';
 import { useWallet } from '@/context/WalletContext';
 import { FileCode, Zap, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
@@ -16,14 +25,44 @@ interface ContractActivity {
 }
 
 // PulseContract ID — deployed on Stellar Testnet
-const DEPLOYED_CONTRACT_ID = process.env.NEXT_PUBLIC_PULSE_CONTRACT_ID || 'CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C';
+const DEPLOYED_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_PULSE_CONTRACT_ID ||
+  'CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C';
 
 // Fallback sample data shown when the API (or its database) is unavailable
 const mockContracts: ContractActivity[] = [
-  { id: 'pulse', contractId: DEPLOYED_CONTRACT_ID, name: 'PulseContract (Deployed)', invocations: 0, lastCalled: '—', status: 'active' },
-  { id: '2', contractId: 'CB3XDEF1234567890ABCDEFGHIJKLMNOPQRSTUVW', name: 'Aqua DEX Router', invocations: 654, lastCalled: '5s ago', status: 'active' },
-  { id: '3', contractId: 'CD9YGHI1234567890ABCDEFGHIJKLMNOPQRSTUVW', name: 'BLND Lending Pool', invocations: 421, lastCalled: '1 min ago', status: 'active' },
-  { id: '4', contractId: 'CE2ZJKL1234567890ABCDEFGHIJKLMNOPQRSTUVW', name: 'NFT Marketplace', invocations: 298, lastCalled: '30s ago', status: 'error' },
+  {
+    id: 'pulse',
+    contractId: DEPLOYED_CONTRACT_ID,
+    name: 'PulseContract (Deployed)',
+    invocations: 0,
+    lastCalled: '—',
+    status: 'active',
+  },
+  {
+    id: '2',
+    contractId: 'CB3XDEF1234567890ABCDEFGHIJKLMNOPQRSTUVW',
+    name: 'Aqua DEX Router',
+    invocations: 654,
+    lastCalled: '5s ago',
+    status: 'active',
+  },
+  {
+    id: '3',
+    contractId: 'CD9YGHI1234567890ABCDEFGHIJKLMNOPQRSTUVW',
+    name: 'BLND Lending Pool',
+    invocations: 421,
+    lastCalled: '1 min ago',
+    status: 'active',
+  },
+  {
+    id: '4',
+    contractId: 'CE2ZJKL1234567890ABCDEFGHIJKLMNOPQRSTUVW',
+    name: 'NFT Marketplace',
+    invocations: 298,
+    lastCalled: '30s ago',
+    status: 'error',
+  },
 ];
 
 const statusIcon = {
@@ -52,7 +91,10 @@ export default function ContractsPage() {
           .map((c: { contractId: string; eventCount: number }) => ({
             id: c.contractId,
             contractId: c.contractId,
-            name: c.contractId === DEPLOYED_CONTRACT_ID ? 'PulseContract (Deployed)' : `Contract ${c.contractId.slice(0, 6)}…`,
+            name:
+              c.contractId === DEPLOYED_CONTRACT_ID
+                ? 'PulseContract (Deployed)'
+                : `Contract ${c.contractId.slice(0, 6)}…`,
             invocations: c.eventCount,
             lastCalled: '—',
             status: c.eventCount > 0 ? 'active' : 'idle',
@@ -100,23 +142,42 @@ export default function ContractsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         {[
           { label: 'Tracked Contracts', value: loading ? '…' : contracts.length },
-          { label: 'Active (24h)', value: loading ? '…' : contracts.filter((c) => c.status === 'active').length },
-          { label: 'Total Invocations', value: loading ? '…' : contracts.reduce((s, c) => s + c.invocations, 0).toLocaleString() },
+          {
+            label: 'Active (24h)',
+            value: loading ? '…' : contracts.filter((c) => c.status === 'active').length,
+          },
+          {
+            label: 'Total Invocations',
+            value: loading
+              ? '…'
+              : contracts.reduce((s, c) => s + c.invocations, 0).toLocaleString(),
+          },
         ].map((stat) => (
           <Card key={stat.label} padding="md">
             <div className="text-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{stat.value}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                {stat.value}
+              </p>
             </div>
           </Card>
         ))}
       </div>
 
-      <SearchInput value={search} onChange={setSearch} placeholder="Search by contract name or ID..." className="w-full sm:w-96" />
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by contract name or ID..."
+        className="w-full sm:w-96"
+      />
 
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <EmptyState icon={<FileCode className="h-10 w-10" />} title="No contracts found" description="Try a different search term" />
+          <EmptyState
+            icon={<FileCode className="h-10 w-10" />}
+            title="No contracts found"
+            description="Try a different search term"
+          />
         ) : (
           filtered.map((c) => (
             <Card key={c.id} padding="md" hover>
@@ -126,16 +187,24 @@ export default function ContractsPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{c.name}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {c.name}
+                    </span>
                     {statusIcon[c.status]}
                     {c.id === 'pulse' && isConnected && (
-                      <Badge variant="success" size="sm">Deployed</Badge>
+                      <Badge variant="success" size="sm">
+                        Deployed
+                      </Badge>
                     )}
                   </div>
-                  <p className="font-mono text-xs text-slate-500">{c.contractId.slice(0, 12)}...{c.contractId.slice(-8)}</p>
+                  <p className="font-mono text-xs text-slate-500">
+                    {c.contractId.slice(0, 12)}...{c.contractId.slice(-8)}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-slate-900 dark:text-slate-100">{c.invocations.toLocaleString()}</p>
+                  <p className="font-bold text-slate-900 dark:text-slate-100">
+                    {c.invocations.toLocaleString()}
+                  </p>
                   <p className="text-xs text-slate-400">{c.lastCalled}</p>
                 </div>
                 {isConnected && (

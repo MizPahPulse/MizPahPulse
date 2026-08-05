@@ -17,10 +17,7 @@ export interface ShortcutConfig {
  * @param shortcuts - Array of shortcut configurations
  * @param enabled - Whether shortcuts are active (default true)
  */
-export function useKeyboardShortcut(
-  shortcuts: ShortcutConfig[],
-  enabled = true,
-) {
+export function useKeyboardShortcut(shortcuts: ShortcutConfig[], enabled = true) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       // Skip when user is typing in an input

@@ -33,9 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <WalletProvider>
-          {children}
-        </WalletProvider>
+        <WalletProvider>{children}</WalletProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

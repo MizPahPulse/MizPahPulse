@@ -55,12 +55,14 @@ export function FilterBar({
         >
           {option.label}
           {option.count !== undefined && (
-            <span className={cn(
-              'ml-0.5 rounded-full px-1 py-0.5 text-[10px]',
-              selected.includes(option.value)
-                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
-            )}>
+            <span
+              className={cn(
+                'ml-0.5 rounded-full px-1 py-0.5 text-[10px]',
+                selected.includes(option.value)
+                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+              )}
+            >
               {option.count}
             </span>
           )}

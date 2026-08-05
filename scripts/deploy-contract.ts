@@ -30,7 +30,10 @@ const __dirname = dirname(__filename);
 
 const HORIZON_URL = 'https://horizon-testnet.stellar.org';
 const SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org';
-const WASM_PATH = resolve(__dirname, '../contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm');
+const WASM_PATH = resolve(
+  __dirname,
+  '../contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm',
+);
 
 async function simulateAndSend(
   tx: TransactionBuilder,
@@ -131,9 +134,7 @@ async function deployContract() {
       fee: BASE_FEE,
       networkPassphrase: Networks.TESTNET,
     })
-      .addOperation(
-        Operation.createCustomContract({ wasmHash, salt, address: deployerAddress }),
-      )
+      .addOperation(Operation.createCustomContract({ wasmHash, salt, address: deployerAddress }))
       .setTimeout(60)
       .build();
 
@@ -141,7 +142,11 @@ async function deployContract() {
 
     // ── Derive Contract ID ──────────────────
     const hashIdPreimage = Buffer.from([0, 0, 0, 0]);
-    const preimageData = Buffer.concat([hashIdPreimage, deployerAddress.toScAddress().toXDR('raw'), salt]);
+    const preimageData = Buffer.concat([
+      hashIdPreimage,
+      deployerAddress.toScAddress().toXDR('raw'),
+      salt,
+    ]);
     const contractHash = crypto.createHash('sha256').update(preimageData).digest();
     const contractId = StrKey.encodeContract(contractHash);
 

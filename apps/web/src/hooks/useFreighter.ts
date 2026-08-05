@@ -77,7 +77,8 @@ export function useFreighter() {
     try {
       // Check if Freighter is installed
       if (!isFreighterInstalled()) {
-        const msg = 'Freighter wallet extension is not installed. Please install Freighter from https://freighter.app';
+        const msg =
+          'Freighter wallet extension is not installed. Please install Freighter from https://freighter.app';
         setError(msg);
         setState('error');
         return null;

@@ -30,7 +30,11 @@ export function CopyButton({ text, className, label }: CopyButtonProps) {
       )}
       title={`Copy ${label || text}`}
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
       {label && <span>{copied ? 'Copied!' : label}</span>}
     </button>
   );

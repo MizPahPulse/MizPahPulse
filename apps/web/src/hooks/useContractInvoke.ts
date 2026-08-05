@@ -75,7 +75,9 @@ export function useContractInvoke(contractId: string) {
 
         // Validate contract ID
         if (!contractId || contractId.length !== 56 || !contractId.startsWith('C')) {
-          throw new Error('INVALID_CONTRACT: The contract ID is invalid. Must start with "C" and be 56 characters.');
+          throw new Error(
+            'INVALID_CONTRACT: The contract ID is invalid. Must start with "C" and be 56 characters.',
+          );
         }
 
         const horizon = new Horizon.Server(networkConfig.horizonUrl);
@@ -103,9 +105,7 @@ export function useContractInvoke(contractId: string) {
         // Simulate to get accurate fees and validate
         const simResponse = await sorobanRpc.simulateTransaction(tx);
         if (rpc.Api.isSimulationError(simResponse)) {
-          throw new Error(
-            `CONTRACT_ERROR: Simulation failed — ${simResponse.error}`,
-          );
+          throw new Error(`CONTRACT_ERROR: Simulation failed — ${simResponse.error}`);
         }
 
         const assembledTx = rpc.assembleTransaction(tx, simResponse).build();
@@ -142,7 +142,8 @@ export function useContractInvoke(contractId: string) {
         setState('success');
         return invokeResult;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'TRANSACTION_FAILED: Contract invocation failed';
+        const message =
+          err instanceof Error ? err.message : 'TRANSACTION_FAILED: Contract invocation failed';
         setError(message);
         setState('error');
         return null;
@@ -180,9 +181,7 @@ export function useContractInvoke(contractId: string) {
           return null;
         }
 
-        return simResponse.result?.retval
-          ? scValToNative(simResponse.result.retval)
-          : null;
+        return simResponse.result?.retval ? scValToNative(simResponse.result.retval) : null;
       } catch {
         return null;
       }

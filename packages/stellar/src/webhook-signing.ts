@@ -8,11 +8,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
  * @param timestamp - Unix timestamp in milliseconds
  * @returns The signature string (e.g., "t=1234567890,v1=abc123def456...")
  */
-export function signWebhookPayload(
-  payload: string,
-  secret: string,
-  timestamp?: number,
-): string {
+export function signWebhookPayload(payload: string, secret: string, timestamp?: number): string {
   const ts = timestamp ?? Date.now();
   const signedContent = `${ts}.${payload}`;
   const signature = createHmac('sha256', secret).update(signedContent).digest('hex');

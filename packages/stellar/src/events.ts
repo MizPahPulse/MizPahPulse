@@ -1,4 +1,9 @@
-import { type EventCategory, type EventType, type RawStellarEvent, type BlockchainEvent } from '@mizpah-pulse/types';
+import {
+  type EventCategory,
+  type EventType,
+  type RawStellarEvent,
+  type BlockchainEvent,
+} from '@mizpah-pulse/types';
 
 /**
  * Categorize a Stellar operation type into an event category

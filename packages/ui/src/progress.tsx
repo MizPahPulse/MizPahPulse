@@ -31,13 +31,21 @@ export function Progress({
 
   return (
     <div className={cn('w-full', className)}>
-      <div className={cn('w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden', sizeStyles[size])}>
+      <div
+        className={cn(
+          'w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden',
+          sizeStyles[size],
+        )}
+      >
         <div
           role="progressbar"
           aria-valuenow={value}
           aria-valuemin={0}
           aria-valuemax={max}
-          className={cn('h-full rounded-full transition-all duration-500 ease-out', variantStyles[variant])}
+          className={cn(
+            'h-full rounded-full transition-all duration-500 ease-out',
+            variantStyles[variant],
+          )}
           style={{ width: `${percent}%` }}
         />
       </div>

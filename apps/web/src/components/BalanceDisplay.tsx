@@ -105,7 +105,12 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
   }
 
   return (
-    <div className={cn('rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900', className)}>
+    <div
+      className={cn(
+        'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900',
+        className,
+      )}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950">

@@ -26,12 +26,9 @@ export function useInfiniteScroll({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [sentinelRef, setSentinelRef] = useState<HTMLDivElement | null>(null);
 
-  const sentinelCallback = useCallback(
-    (node: HTMLDivElement | null) => {
-      setSentinelRef(node);
-    },
-    [],
-  );
+  const sentinelCallback = useCallback((node: HTMLDivElement | null) => {
+    setSentinelRef(node);
+  }, []);
 
   useEffect(() => {
     if (observerRef.current) {

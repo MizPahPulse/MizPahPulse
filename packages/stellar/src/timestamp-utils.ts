@@ -16,5 +16,5 @@ export function formatLedgerAge(ledgerTs: number): string {
 }
 
 export function isLedgerRecent(ledgerTs: number, maxAgeSeconds = 300): boolean {
-  return (Math.floor(Date.now() / 1000) - ledgerTs) < maxAgeSeconds;
+  return Math.floor(Date.now() / 1000) - ledgerTs < maxAgeSeconds;
 }

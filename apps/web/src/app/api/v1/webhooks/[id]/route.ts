@@ -5,10 +5,7 @@ import { successResponse, errorResponse, ErrorCode } from '@/lib/api-errors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function DELETE(
-  _request: Request,
-  props: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(_request: Request, props: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await props.params;
     const webhook = await prisma.webhookSubscription.findUnique({ where: { id } });

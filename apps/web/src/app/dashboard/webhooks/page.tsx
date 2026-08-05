@@ -5,7 +5,14 @@ import { Card, Badge, cn, StatusDot, EmptyState } from '@mizpah-pulse/ui';
 import { Webhook, Plus, Copy, Trash2, X } from 'lucide-react';
 import { isValidUrl } from '@/lib/validators';
 
-const EVENT_OPTIONS = ['PAYMENT', 'DEX_TRADE', 'SOROBAN_INVOKE', 'SOROBAN_EVENT', 'NFT_TRANSFER', 'TOKEN_TRANSFER'];
+const EVENT_OPTIONS = [
+  'PAYMENT',
+  'DEX_TRADE',
+  'SOROBAN_INVOKE',
+  'SOROBAN_EVENT',
+  'NFT_TRANSFER',
+  'TOKEN_TRANSFER',
+];
 
 interface WebhookItem {
   id: string;
@@ -17,9 +24,30 @@ interface WebhookItem {
 }
 
 const INITIAL_WEBHOOKS: WebhookItem[] = [
-  { id: '1', endpoint: 'https://myapp.com/webhooks/stellar', events: ['PAYMENT', 'DEX_TRADE'], status: 'active', deliveries: 342, lastDelivery: '2s ago' },
-  { id: '2', endpoint: 'https://api.defiprotocol.com/hooks', events: ['SOROBAN_INVOKE', 'SOROBAN_EVENT'], status: 'active', deliveries: 128, lastDelivery: '1 min ago' },
-  { id: '3', endpoint: 'https://notification.example.com/ingest', events: ['NFT_TRANSFER'], status: 'error', deliveries: 56, lastDelivery: '1 hour ago' },
+  {
+    id: '1',
+    endpoint: 'https://myapp.com/webhooks/stellar',
+    events: ['PAYMENT', 'DEX_TRADE'],
+    status: 'active',
+    deliveries: 342,
+    lastDelivery: '2s ago',
+  },
+  {
+    id: '2',
+    endpoint: 'https://api.defiprotocol.com/hooks',
+    events: ['SOROBAN_INVOKE', 'SOROBAN_EVENT'],
+    status: 'active',
+    deliveries: 128,
+    lastDelivery: '1 min ago',
+  },
+  {
+    id: '3',
+    endpoint: 'https://notification.example.com/ingest',
+    events: ['NFT_TRANSFER'],
+    status: 'error',
+    deliveries: 56,
+    lastDelivery: '1 hour ago',
+  },
 ];
 
 export default function WebhooksPage() {
@@ -114,7 +142,10 @@ export default function WebhooksPage() {
 
           <div className="mt-4 space-y-4">
             <div>
-              <label htmlFor="webhook-endpoint" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+              <label
+                htmlFor="webhook-endpoint"
+                className="block text-xs font-medium text-slate-600 dark:text-slate-400"
+              >
                 Endpoint URL
               </label>
               <input
@@ -143,7 +174,9 @@ export default function WebhooksPage() {
             </div>
 
             <div>
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Event types</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Event types
+              </span>
               <div className="mt-2 flex flex-wrap gap-2">
                 {EVENT_OPTIONS.map((evt) => {
                   const selected = selectedEvents.includes(evt);
@@ -179,13 +212,18 @@ export default function WebhooksPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         {[
           { label: 'Active Webhooks', value: webhooks.filter((w) => w.status === 'active').length },
-          { label: 'Total Delivered', value: webhooks.reduce((s, w) => s + w.deliveries, 0).toLocaleString() },
+          {
+            label: 'Total Delivered',
+            value: webhooks.reduce((s, w) => s + w.deliveries, 0).toLocaleString(),
+          },
           { label: 'Configured Events', value: webhooks.reduce((s, w) => s + w.events.length, 0) },
         ].map((stat) => (
           <Card key={stat.label} padding="md">
             <div className="text-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{stat.value}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                {stat.value}
+              </p>
             </div>
           </Card>
         ))}
@@ -209,12 +247,16 @@ export default function WebhooksPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-sm text-slate-900 dark:text-slate-100">{wh.endpoint}</span>
+                    <span className="truncate font-mono text-sm text-slate-900 dark:text-slate-100">
+                      {wh.endpoint}
+                    </span>
                     <StatusDot status={wh.status === 'active' ? 'online' : 'error'} />
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {wh.events.map((e) => (
-                      <Badge key={e} variant="default" size="sm">{e}</Badge>
+                      <Badge key={e} variant="default" size="sm">
+                        {e}
+                      </Badge>
                     ))}
                   </div>
                   <p className="mt-1 text-xs text-slate-400">

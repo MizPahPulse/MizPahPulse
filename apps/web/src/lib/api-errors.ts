@@ -69,7 +69,11 @@ export function errorResponse(
 /**
  * Create a standardized success response.
  */
-export function successResponse<T>(data: T, status = 200, meta?: Record<string, unknown>): NextResponse {
+export function successResponse<T>(
+  data: T,
+  status = 200,
+  meta?: Record<string, unknown>,
+): NextResponse {
   return NextResponse.json(
     {
       success: true,

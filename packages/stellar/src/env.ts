@@ -50,10 +50,19 @@ export function validateEnv(): { env: ValidatedEnv; warnings: string[] } {
   // Extract all env vars from process.env (for Node.js) or from known globals
   const rawEnv: Record<string, string | undefined> = {};
   const requiredKeys = [
-    'DATABASE_URL', 'REDIS_URL', 'STELLAR_NETWORK', 'WS_PORT',
-    'CORS_ORIGIN', 'NODE_ENV', 'JWT_SECRET', 'API_KEY_SECRET',
-    'WEBHOOK_SECRET', 'STELLAR_HORIZON_URL', 'STELLAR_SOROBAN_RPC_URL',
-    'NEXT_PUBLIC_STELLAR_NETWORK', 'NEXT_PUBLIC_PULSE_CONTRACT_ID',
+    'DATABASE_URL',
+    'REDIS_URL',
+    'STELLAR_NETWORK',
+    'WS_PORT',
+    'CORS_ORIGIN',
+    'NODE_ENV',
+    'JWT_SECRET',
+    'API_KEY_SECRET',
+    'WEBHOOK_SECRET',
+    'STELLAR_HORIZON_URL',
+    'STELLAR_SOROBAN_RPC_URL',
+    'NEXT_PUBLIC_STELLAR_NETWORK',
+    'NEXT_PUBLIC_PULSE_CONTRACT_ID',
     'NEXT_PUBLIC_WS_URL',
   ];
 

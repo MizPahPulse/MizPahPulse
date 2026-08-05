@@ -103,12 +103,17 @@ const connectionStats = {
   peakConnections: 0,
 };
 
-const connectionLimiter = new ConnectionLimiter(parseInt(process.env.MAX_CONNECTIONS || '10000', 10));
+const connectionLimiter = new ConnectionLimiter(
+  parseInt(process.env.MAX_CONNECTIONS || '10000', 10),
+);
 
 io.on('connection', (socket) => {
   // Enforce a max connection limit to protect the server from abuse
   if (!connectionLimiter.canConnect()) {
-    socket.emit('error', { code: 'CONNECTION_LIMIT_REACHED', message: 'Server is at max capacity' });
+    socket.emit('error', {
+      code: 'CONNECTION_LIMIT_REACHED',
+      message: 'Server is at max capacity',
+    });
     socket.disconnect(true);
     return;
   }
@@ -120,9 +125,7 @@ io.on('connection', (socket) => {
   }
   incrementMetric('connections');
 
-  console.log(
-    `[WS] Client connected: ${socket.id} (active: ${connectionStats.activeConnections})`,
-  );
+  console.log(`[WS] Client connected: ${socket.id} (active: ${connectionStats.activeConnections})`);
 
   // Auto-join the all-events feed
   socket.join('feed:all');

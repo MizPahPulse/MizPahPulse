@@ -19,7 +19,11 @@ vi.mock('@stellar/stellar-sdk', () => ({
   TransactionBuilder: vi.fn(),
   BASE_FEE: '100',
   Server: vi.fn(),
-  SorobanRpc: { Server: vi.fn(), assembleTransaction: vi.fn(), Api: { isSimulationError: vi.fn() } },
+  SorobanRpc: {
+    Server: vi.fn(),
+    assembleTransaction: vi.fn(),
+    Api: { isSimulationError: vi.fn() },
+  },
   xdr: { ScVal: { scvSymbol: vi.fn() } },
   Address: vi.fn(),
   Contract: vi.fn(),
@@ -63,9 +67,7 @@ describe('useContractInvoke', () => {
       isConnected: true,
     });
 
-    const { result } = renderHook(() =>
-      useContractInvoke('invalid-contract-id'),
-    );
+    const { result } = renderHook(() => useContractInvoke('invalid-contract-id'));
 
     await act(async () => {
       const invokeResult = await result.current.invoke('pulse', ['alice']);

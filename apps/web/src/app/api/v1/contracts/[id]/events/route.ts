@@ -12,10 +12,7 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch events for a specific contract with pagination and filtering.
  */
-export async function GET(
-  request: Request,
-  props: { params: Promise<{ id: string }> },
-) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 60,
     windowMs: 60_000,
@@ -44,7 +41,11 @@ export async function GET(
       prisma.event.count({ where }),
     ]);
 
-    const result = paginatedResponse(events as Array<{ id: string } & typeof events[0]>, total, pagination);
+    const result = paginatedResponse(
+      events as Array<{ id: string } & (typeof events)[0]>,
+      total,
+      pagination,
+    );
 
     return successResponse({
       contractId: id,
@@ -52,9 +53,10 @@ export async function GET(
       events: result.data.map((e) => ({
         ...e,
         ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),
-        payload: typeof (e as unknown as { payload: unknown }).payload === 'string'
-          ? JSON.parse((e as unknown as { payload: string }).payload)
-          : (e as unknown as { payload: unknown }).payload,
+        payload:
+          typeof (e as unknown as { payload: unknown }).payload === 'string'
+            ? JSON.parse((e as unknown as { payload: string }).payload)
+            : (e as unknown as { payload: unknown }).payload,
       })),
     });
   } catch (error) {

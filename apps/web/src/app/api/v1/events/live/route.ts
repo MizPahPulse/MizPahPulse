@@ -76,9 +76,7 @@ export async function GET(request: Request) {
             });
 
             controller.enqueue(
-              encoder.encode(
-                `id: ${event.id}\nevent: event\ndata: ${data}\nretry: 2000\n\n`,
-              ),
+              encoder.encode(`id: ${event.id}\nevent: event\ndata: ${data}\nretry: 2000\n\n`),
             );
           }
         } catch (err) {

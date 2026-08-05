@@ -8,14 +8,7 @@ import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 import { formatCompactNumber } from '@/lib/format-number';
 import { MAX_EVENT_BUFFER } from '@/lib/constants';
-import {
-  Activity,
-  ArrowUpDown,
-  Filter,
-  SlidersHorizontal,
-  Zap,
-  Radio,
-} from 'lucide-react';
+import { Activity, ArrowUpDown, Filter, SlidersHorizontal, Zap, Radio } from 'lucide-react';
 
 /** Maximum number of events to keep in the buffer (from shared constants) */
 
@@ -49,16 +42,84 @@ const SAMPLE_ACCOUNTS = [
 ];
 
 const SAMPLE_TEMPLATES: Array<Omit<FeedEvent, 'id' | 'time' | 'timestamp'>> = [
-  { type: 'PAYMENT', category: 'PAYMENT', title: 'Payment: 125 XLM', from: 'GABC…XYZ', amount: '125 XLM', status: 'success' },
-  { type: 'DEX_TRADE', category: 'DEX', title: 'DEX Trade: USDC/XLM', from: 'GDEF…UVW', amount: '500 USDC', status: 'success' },
-  { type: 'SOROBAN_INVOKE', category: 'CONTRACT', title: 'Contract Call: swap()', from: 'GHIJ…RST', status: 'info' },
-  { type: 'NFT_TRANSFER', category: 'NFT', title: 'NFT Transfer: #1234', from: 'GKLM…NOP', to: 'GABC…XYZ', status: 'success' },
-  { type: 'CREATE_ACCOUNT', category: 'ACCOUNT', title: 'Account Created', from: 'GNOP…TUV', amount: '10 XLM', status: 'success' },
-  { type: 'TOKEN_TRANSFER', category: 'TOKEN', title: 'Token Transfer: 2,000 USDC', from: 'GQRW…VWX', amount: '2,000 USDC', status: 'success' },
-  { type: 'LIQUIDITY_POOL_DEPOSIT', category: 'LIQUIDITY', title: 'LP Deposit: XLM+USDC', from: 'GSTU…YZA', amount: '800 XLM', status: 'warning' },
-  { type: 'SOROBAN_DEPLOY', category: 'CONTRACT', title: 'Contract Deployed', from: 'GBCD…EFG', status: 'info' },
-  { type: 'MANAGE_SELL_OFFER', category: 'DEX', title: 'Sell Offer: 300 XLM', from: 'GHIJ…RST', amount: '300 XLM', status: 'success' },
-  { type: 'CLAWBACK', category: 'TOKEN', title: 'Clawback: 50 USDC', from: 'GKLM…NOP', amount: '50 USDC', status: 'error' },
+  {
+    type: 'PAYMENT',
+    category: 'PAYMENT',
+    title: 'Payment: 125 XLM',
+    from: 'GABC…XYZ',
+    amount: '125 XLM',
+    status: 'success',
+  },
+  {
+    type: 'DEX_TRADE',
+    category: 'DEX',
+    title: 'DEX Trade: USDC/XLM',
+    from: 'GDEF…UVW',
+    amount: '500 USDC',
+    status: 'success',
+  },
+  {
+    type: 'SOROBAN_INVOKE',
+    category: 'CONTRACT',
+    title: 'Contract Call: swap()',
+    from: 'GHIJ…RST',
+    status: 'info',
+  },
+  {
+    type: 'NFT_TRANSFER',
+    category: 'NFT',
+    title: 'NFT Transfer: #1234',
+    from: 'GKLM…NOP',
+    to: 'GABC…XYZ',
+    status: 'success',
+  },
+  {
+    type: 'CREATE_ACCOUNT',
+    category: 'ACCOUNT',
+    title: 'Account Created',
+    from: 'GNOP…TUV',
+    amount: '10 XLM',
+    status: 'success',
+  },
+  {
+    type: 'TOKEN_TRANSFER',
+    category: 'TOKEN',
+    title: 'Token Transfer: 2,000 USDC',
+    from: 'GQRW…VWX',
+    amount: '2,000 USDC',
+    status: 'success',
+  },
+  {
+    type: 'LIQUIDITY_POOL_DEPOSIT',
+    category: 'LIQUIDITY',
+    title: 'LP Deposit: XLM+USDC',
+    from: 'GSTU…YZA',
+    amount: '800 XLM',
+    status: 'warning',
+  },
+  {
+    type: 'SOROBAN_DEPLOY',
+    category: 'CONTRACT',
+    title: 'Contract Deployed',
+    from: 'GBCD…EFG',
+    status: 'info',
+  },
+  {
+    type: 'MANAGE_SELL_OFFER',
+    category: 'DEX',
+    title: 'Sell Offer: 300 XLM',
+    from: 'GHIJ…RST',
+    amount: '300 XLM',
+    status: 'success',
+  },
+  {
+    type: 'CLAWBACK',
+    category: 'TOKEN',
+    title: 'Clawback: 50 USDC',
+    from: 'GKLM…NOP',
+    amount: '50 USDC',
+    status: 'error',
+  },
 ];
 
 const categoryVariantMap: Record<string, string> = {
@@ -85,7 +146,6 @@ const categoryOptions = [
   { label: 'Liquidity', value: 'LIQUIDITY' },
   { label: 'Governance', value: 'GOVERNANCE' },
 ];
-
 
 /**
  * Build a human-readable title from a WebSocket event
@@ -147,8 +207,10 @@ export default function FeedPage() {
     if (!lastEvent) return;
 
     const rawEvent = lastEvent as LiveEvent;
-    const category = (rawEvent.data as Record<string, unknown> | undefined)?.category as string || 'UNKNOWN';
-    const accountId = (rawEvent.data as Record<string, unknown> | undefined)?.accountId as string || '';
+    const category =
+      ((rawEvent.data as Record<string, unknown> | undefined)?.category as string) || 'UNKNOWN';
+    const accountId =
+      ((rawEvent.data as Record<string, unknown> | undefined)?.accountId as string) || '';
     const title = buildEventTitle(rawEvent);
 
     const feedEvent: FeedEvent = {
@@ -181,7 +243,9 @@ export default function FeedPage() {
           {
             ...template,
             id: `sim-${++idCounter.current}-${Date.now()}`,
-            from: template.from.startsWith('G') ? truncateAddress(template.from) : account.slice(0, 4) + '…' + account.slice(-3),
+            from: template.from.startsWith('G')
+              ? truncateAddress(template.from)
+              : account.slice(0, 4) + '…' + account.slice(-3),
             time: 'just now',
             timestamp: Date.now(),
           },
@@ -215,7 +279,12 @@ export default function FeedPage() {
   // Filter and sort
   const filteredEvents = events.filter((event) => {
     if (selectedCategories.length > 0 && !selectedCategories.includes(event.category)) return false;
-    if (search && !event.title.toLowerCase().includes(search.toLowerCase()) && !event.from.toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      search &&
+      !event.title.toLowerCase().includes(search.toLowerCase()) &&
+      !event.from.toLowerCase().includes(search.toLowerCase())
+    )
+      return false;
     return true;
   });
 
@@ -226,7 +295,9 @@ export default function FeedPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100" id="feed-heading">Live Activity Feed</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100" id="feed-heading">
+            Live Activity Feed
+          </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Real-time Stellar blockchain events stream
           </p>
@@ -295,9 +366,7 @@ export default function FeedPage() {
                 <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
                   {stat.label}
                 </p>
-                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {stat.value}
-                </p>
+                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{stat.value}</p>
               </div>
             </div>
           </Card>
@@ -378,7 +447,19 @@ export default function FeedPage() {
                   <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {event.title}
                   </span>
-                  <Badge variant={(categoryVariantMap[event.category] || 'default') as 'success' | 'info' | 'purple' | 'pink' | 'amber' | 'warning' | 'error' | 'default'}>
+                  <Badge
+                    variant={
+                      (categoryVariantMap[event.category] || 'default') as
+                        | 'success'
+                        | 'info'
+                        | 'purple'
+                        | 'pink'
+                        | 'amber'
+                        | 'warning'
+                        | 'error'
+                        | 'default'
+                    }
+                  >
                     {event.category}
                   </Badge>
                 </div>
@@ -392,7 +473,9 @@ export default function FeedPage() {
                   )}
                   {event.amount && (
                     <>
-                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">•</span>
+                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">
+                        •
+                      </span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
                         {event.amount}
                       </span>
@@ -403,7 +486,10 @@ export default function FeedPage() {
 
               {/* Time */}
               <div className="flex-shrink-0 text-right">
-                <time className="text-xs text-slate-400 dark:text-slate-500" dateTime={new Date(event.timestamp).toISOString()}>
+                <time
+                  className="text-xs text-slate-400 dark:text-slate-500"
+                  dateTime={new Date(event.timestamp).toISOString()}
+                >
                   {event.time}
                 </time>
               </div>

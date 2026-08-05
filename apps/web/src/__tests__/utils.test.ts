@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { formatTimeAgo, formatDateTime, isToday } from '@/lib/date-utils';
-import { formatCompactNumber, formatCurrency, formatPercent, formatDuration } from '@/lib/format-number';
+import {
+  formatCompactNumber,
+  formatCurrency,
+  formatPercent,
+  formatDuration,
+} from '@/lib/format-number';
 import { isValidEmail, isValidUrl, isValidPositiveNumber, isValidHexColor } from '@/lib/validators';
 import { truncateAddress, truncateHash, formatXLM } from '@/lib/display-utils';
-import { AppError, ValidationError, NotFoundError, UnauthorizedError, ForbiddenError, formatError } from '@/lib/error-handler';
+import {
+  AppError,
+  ValidationError,
+  NotFoundError,
+  UnauthorizedError,
+  ForbiddenError,
+  formatError,
+} from '@/lib/error-handler';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -81,7 +93,9 @@ describe('validators', () => {
 
 describe('display-utils', () => {
   it('truncates long addresses and hashes', () => {
-    expect(truncateAddress('GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN')).toMatch(/^GA5ZSE\.\.\.KZVN$/);
+    expect(truncateAddress('GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN')).toMatch(
+      /^GA5ZSE\.\.\.KZVN$/,
+    );
     expect(truncateAddress('short')).toBe('short');
     expect(truncateHash('0x1234567890abcdef')).toMatch(/\.\.\./);
   });

@@ -45,10 +45,22 @@ const categoryColors: Record<EventCategory, string> = {
   UNKNOWN: 'text-slate-400 bg-slate-50 dark:bg-slate-950',
 };
 
-export function EventIcon({ category, className }: { category: EventCategory; className?: string }) {
+export function EventIcon({
+  category,
+  className,
+}: {
+  category: EventCategory;
+  className?: string;
+}) {
   const Icon = categoryIconMap[category] ?? HelpCircle;
   return (
-    <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', categoryColors[category] || categoryColors.UNKNOWN, className)}>
+    <div
+      className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-lg',
+        categoryColors[category] || categoryColors.UNKNOWN,
+        className,
+      )}
+    >
       <Icon className="h-4 w-4" />
     </div>
   );

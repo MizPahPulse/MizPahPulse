@@ -11,11 +11,23 @@ export function useEventSource(url: string | null) {
     const es = new EventSource(url);
     sourceRef.current = es;
     es.onopen = () => setStatus('open');
-    es.onmessage = (e) => { try { setData(JSON.parse(e.data)); } catch { setData(e.data); } };
-    es.onerror = () => { setStatus('closed'); es.close(); };
+    es.onmessage = (e) => {
+      try {
+        setData(JSON.parse(e.data));
+      } catch {
+        setData(e.data);
+      }
+    };
+    es.onerror = () => {
+      setStatus('closed');
+      es.close();
+    };
     return () => es.close();
   }, [url]);
 
-  const close = useCallback(() => { sourceRef.current?.close(); setStatus('closed'); }, []);
+  const close = useCallback(() => {
+    sourceRef.current?.close();
+    setStatus('closed');
+  }, []);
   return { data, status, close };
 }

@@ -9,5 +9,10 @@ export function isValidMemoText(text: string): boolean {
   return Buffer.byteLength(text, 'utf-8') <= 28;
 }
 export function isValidMemoId(id: string): boolean {
-  try { const n = BigInt(id); return n >= 0n; } catch { return false; }
+  try {
+    const n = BigInt(id);
+    return n >= 0n;
+  } catch {
+    return false;
+  }
 }

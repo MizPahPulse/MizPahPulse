@@ -107,9 +107,7 @@ function ToastContainer({
               {toast.title}
             </p>
             {toast.message && (
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                {toast.message}
-              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{toast.message}</p>
             )}
           </div>
           <button

@@ -88,7 +88,9 @@ export default function AnalyticsPage() {
             <p
               className={cn(
                 'mt-2 text-xs font-medium',
-                metric.trend === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                metric.trend === 'up'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400',
               )}
             >
               {metric.change} vs yesterday
@@ -103,9 +105,7 @@ export default function AnalyticsPage() {
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Activity Over Time
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Last 24 hours
-          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Last 24 hours</p>
         </CardHeader>
         <CardContent>
           <div className="h-64 space-y-1">
@@ -212,5 +212,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-
-

@@ -38,8 +38,7 @@ const NETWORK_CONFIGS: Record<StellarNetwork, Omit<StellarConfig, 'network' | 'i
  * Get Stellar network configuration
  */
 export function getNetworkConfig(network?: StellarNetwork): StellarConfig {
-  const selectedNetwork =
-    network || (process.env.STELLAR_NETWORK as StellarNetwork) || 'TESTNET';
+  const selectedNetwork = network || (process.env.STELLAR_NETWORK as StellarNetwork) || 'TESTNET';
 
   const config = NETWORK_CONFIGS[selectedNetwork];
   if (!config) {

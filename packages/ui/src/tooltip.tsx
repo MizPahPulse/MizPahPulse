@@ -36,7 +36,13 @@ export function Tooltip({ content, children, position = 'top', className }: Tool
   }, []);
 
   return (
-    <div className="relative inline-flex" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <div
+      className="relative inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
       {children}
       {visible && (
         <div

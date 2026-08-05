@@ -1,7 +1,13 @@
 import React from 'react';
 import { cn } from './cn';
 
-export function Spinner({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+export function Spinner({
+  className,
+  size = 'md',
+}: {
+  className?: string;
+  size?: 'sm' | 'md' | 'lg';
+}) {
   const sizeStyles = {
     sm: 'h-4 w-4 border-2',
     md: 'h-8 w-8 border-2',

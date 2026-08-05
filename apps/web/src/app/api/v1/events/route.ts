@@ -3,6 +3,8 @@ import { prisma } from '@mizpah-pulse/database';
 import { EventFilterSchema } from '@mizpah-pulse/types';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
+import { recordRequest } from '@/lib/monitoring';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -34,8 +36,12 @@ export async function GET(request: Request) {
       severity: searchParams.getAll('severity') || undefined,
       startDate: searchParams.get('startDate') || undefined,
       endDate: searchParams.get('endDate') || undefined,
-      minLedger: searchParams.get('minLedger') ? parseInt(searchParams.get('minLedger')!) : undefined,
-      maxLedger: searchParams.get('maxLedger') ? parseInt(searchParams.get('maxLedger')!) : undefined,
+      minLedger: searchParams.get('minLedger')
+        ? parseInt(searchParams.get('minLedger')!)
+        : undefined,
+      maxLedger: searchParams.get('maxLedger')
+        ? parseInt(searchParams.get('maxLedger')!)
+        : undefined,
       searchQuery: searchParams.get('q') || undefined,
       limit: searchParams.get('limit') ? Math.min(parseInt(searchParams.get('limit')!), 100) : 50,
       cursor: searchParams.get('cursor') || undefined,
@@ -52,10 +58,14 @@ export async function GET(request: Request) {
     if (filters.contractIds?.length) where.contractId = { in: filters.contractIds };
     if (filters.assetCodes?.length) where.assetCode = { in: filters.assetCodes };
     if (filters.severity?.length) where.severity = { in: filters.severity };
-    if (filters.startDate) where.timestamp = { ...(where.timestamp as object), gte: new Date(filters.startDate) };
-    if (filters.endDate) where.timestamp = { ...(where.timestamp as object), lte: new Date(filters.endDate) };
-    if (filters.minLedger) where.ledgerSequence = { ...(where.ledgerSequence as object), gte: filters.minLedger };
-    if (filters.maxLedger) where.ledgerSequence = { ...(where.ledgerSequence as object), lte: filters.maxLedger };
+    if (filters.startDate)
+      where.timestamp = { ...(where.timestamp as object), gte: new Date(filters.startDate) };
+    if (filters.endDate)
+      where.timestamp = { ...(where.timestamp as object), lte: new Date(filters.endDate) };
+    if (filters.minLedger)
+      where.ledgerSequence = { ...(where.ledgerSequence as object), gte: filters.minLedger };
+    if (filters.maxLedger)
+      where.ledgerSequence = { ...(where.ledgerSequence as object), lte: filters.maxLedger };
     if (filters.searchQuery) {
       where.OR = [
         { transactionHash: { contains: filters.searchQuery, mode: 'insensitive' } },
@@ -79,11 +89,18 @@ export async function GET(request: Request) {
     const data = hasMore ? events.slice(0, filters.limit) : events;
 
     return successResponse({
-      events: data.map((e: { id: string; payload: unknown; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-        ...e,
-        ledgerSequence: e.ledgerSequence.toString(),
-        payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
-      })),
+      events: data.map(
+        (e: {
+          id: string;
+          payload: unknown;
+          ledgerSequence: number | bigint;
+          [key: string]: unknown;
+        }) => ({
+          ...e,
+          ledgerSequence: e.ledgerSequence.toString(),
+          payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
+        }),
+      ),
       total,
       limit: filters.limit,
       cursor: hasMore ? data[data.length - 1]?.id : undefined,
@@ -91,13 +108,15 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      recordRequest(0, true);
       return errorResponse(
         ErrorCode.VALIDATION_ERROR,
         'Invalid filter parameters',
         error.flatten() as unknown as Record<string, unknown>,
       );
     }
-    console.error('[API] Events error:', error);
+    logger.error('[API] Events error:', error);
+    recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch events');
   }
 }

@@ -56,9 +56,21 @@ async function main() {
 
   // Seed assets
   const assets = [
-    { code: 'USDC', issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', type: 'CREDIT_ALPHANUM12' },
-    { code: 'USDT', issuer: 'GCQTGZQQ5ANDQ6NGTRFNOCN4R5ZOIUM4JBF7AGVYMTEGFY6MOY5KY6CJ', type: 'CREDIT_ALPHANUM12' },
-    { code: 'EURMTL', issuer: 'GACS6TAAA65RQCINSOWTR4WVKUCOP7HCC5HV7PXBJEW4MKIAICXPYJWX', type: 'CREDIT_ALPHANUM12' },
+    {
+      code: 'USDC',
+      issuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+      type: 'CREDIT_ALPHANUM12',
+    },
+    {
+      code: 'USDT',
+      issuer: 'GCQTGZQQ5ANDQ6NGTRFNOCN4R5ZOIUM4JBF7AGVYMTEGFY6MOY5KY6CJ',
+      type: 'CREDIT_ALPHANUM12',
+    },
+    {
+      code: 'EURMTL',
+      issuer: 'GACS6TAAA65RQCINSOWTR4WVKUCOP7HCC5HV7PXBJEW4MKIAICXPYJWX',
+      type: 'CREDIT_ALPHANUM12',
+    },
   ];
 
   for (const asset of assets) {
@@ -89,18 +101,25 @@ async function main() {
   for (let i = 0; i < 50; i++) {
     const eventType = EVENT_TYPES[i % EVENT_TYPES.length] || 'PAYMENT';
     const accountId = SAMPLE_ACCOUNTS[i % SAMPLE_ACCOUNTS.length];
-    const contractId = eventType === 'SOROBAN_INVOKE' ? SAMPLE_CONTRACTS[i % SAMPLE_CONTRACTS.length] : undefined;
+    const contractId =
+      eventType === 'SOROBAN_INVOKE' ? SAMPLE_CONTRACTS[i % SAMPLE_CONTRACTS.length] : undefined;
     const timestamp = new Date(now.getTime() - i * 30_000);
 
     events.push({
       eventType,
       source: i < 30 ? 'HORIZON' : 'SOROBAN_RPC',
-      category: eventType === 'PAYMENT' ? 'PAYMENT'
-        : eventType === 'SOROBAN_INVOKE' ? 'CONTRACT'
-        : eventType === 'DEX_TRADE' ? 'DEX'
-        : eventType === 'NFT_TRANSFER' ? 'NFT'
-        : eventType === 'TOKEN_TRANSFER' ? 'TOKEN'
-        : 'ACCOUNT',
+      category:
+        eventType === 'PAYMENT'
+          ? 'PAYMENT'
+          : eventType === 'SOROBAN_INVOKE'
+            ? 'CONTRACT'
+            : eventType === 'DEX_TRADE'
+              ? 'DEX'
+              : eventType === 'NFT_TRANSFER'
+                ? 'NFT'
+                : eventType === 'TOKEN_TRANSFER'
+                  ? 'TOKEN'
+                  : 'ACCOUNT',
       transactionHash: `0x${uuidv4().replace(/-/g, '')}`,
       ledgerSequence: BigInt(5_000_000 + i),
       pagingToken: `paging-${uuidv4()}`,
@@ -108,7 +127,9 @@ async function main() {
       accountId,
       contractId,
       assetCode: ['PAYMENT', 'TOKEN_TRANSFER'].includes(eventType) ? 'XLM' : undefined,
-      amount: ['PAYMENT', 'TOKEN_TRANSFER'].includes(eventType) ? String(Math.floor(Math.random() * 1000) + 1) : undefined,
+      amount: ['PAYMENT', 'TOKEN_TRANSFER'].includes(eventType)
+        ? String(Math.floor(Math.random() * 1000) + 1)
+        : undefined,
       payload: {
         type: eventType,
         source_account: accountId,

@@ -9,10 +9,7 @@ const nextConfig = {
     '@mizpah-pulse/stellar',
   ],
   experimental: {
-    optimizePackageImports: [
-      '@mizpah-pulse/ui',
-      'lucide-react',
-    ],
+    optimizePackageImports: ['@mizpah-pulse/ui', 'lucide-react'],
   },
   images: {
     remotePatterns: [

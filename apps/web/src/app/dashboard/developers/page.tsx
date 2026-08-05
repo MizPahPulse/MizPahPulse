@@ -5,8 +5,22 @@ import { Card, CardContent, CardHeader, cn, EmptyState, CopyButton } from '@mizp
 import { Code, Key, FileText, Globe, Copy, Eye, EyeOff } from 'lucide-react';
 
 const apiKeys = [
-  { id: '1', name: 'Production App', key: 'mp_live_xxxxxxxxxxxxx', created: '2 weeks ago', lastUsed: '2 min ago', permissions: ['read', 'write'] },
-  { id: '2', name: 'Dev Testing', key: 'mp_test_yyyyyyyyyyyyy', created: '3 days ago', lastUsed: '1 hour ago', permissions: ['read'] },
+  {
+    id: '1',
+    name: 'Production App',
+    key: 'mp_live_xxxxxxxxxxxxx',
+    created: '2 weeks ago',
+    lastUsed: '2 min ago',
+    permissions: ['read', 'write'],
+  },
+  {
+    id: '2',
+    name: 'Dev Testing',
+    key: 'mp_test_yyyyyyyyyyyyy',
+    created: '3 days ago',
+    lastUsed: '1 hour ago',
+    permissions: ['read'],
+  },
 ];
 
 export default function DevelopersPage() {
@@ -66,7 +80,11 @@ export default function DevelopersPage() {
                   onClick={() => setShowKey(showKey === apiKey.id ? null : apiKey.id)}
                   className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  {showKey === apiKey.id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showKey === apiKey.id ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
                 <CopyButton text={apiKey.key} />
               </div>

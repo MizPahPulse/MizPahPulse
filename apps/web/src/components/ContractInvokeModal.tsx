@@ -4,15 +4,7 @@ import React, { useState, type FormEvent } from 'react';
 import { useContractInvoke } from '@/hooks/useContractInvoke';
 import { useWallet } from '@/context/WalletContext';
 import { cn } from '@mizpah-pulse/ui';
-import {
-  Zap,
-  X,
-  CheckCircle,
-  AlertTriangle,
-  ExternalLink,
-  Loader2,
-  FileCode,
-} from 'lucide-react';
+import { Zap, X, CheckCircle, AlertTriangle, ExternalLink, Loader2, FileCode } from 'lucide-react';
 
 interface ContractInvokeModalProps {
   /** The deployed contract ID on Stellar Testnet */
@@ -178,7 +170,10 @@ export function ContractInvokeModal({ contractId, isOpen, onClose }: ContractInv
                         : 'Transaction Failed'}
                 </h3>
                 <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
-                  {error.replace(/^(WALLET_NOT_CONNECTED|INVALID_CONTRACT|CONTRACT_ERROR|TRANSACTION_FAILED):\s*/, '')}
+                  {error.replace(
+                    /^(WALLET_NOT_CONNECTED|INVALID_CONTRACT|CONTRACT_ERROR|TRANSACTION_FAILED):\s*/,
+                    '',
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-3">

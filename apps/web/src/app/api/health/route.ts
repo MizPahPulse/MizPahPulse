@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { APP_VERSION } from '@/lib/constants';
+import { logger } from '@/lib/logger';
+import { recordRequest, getMetricsSnapshot, getErrorRate } from '@/lib/monitoring';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +34,7 @@ export async function GET(): Promise<NextResponse> {
       latencyMs: Date.now() - dbStart,
     };
   } catch (err) {
+    logger.error('[Health] Database check failed:', err);
     checks.database = {
       status: 'error',
       latencyMs: Date.now() - start,
@@ -43,7 +47,10 @@ export async function GET(): Promise<NextResponse> {
     try {
       const redisStart = Date.now();
       const Redis = (await import('ioredis')).default;
-      const redis = new Redis(process.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
+      const redis = new Redis(process.env.REDIS_URL, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+      });
       await redis.ping();
       await redis.quit();
       checks.redis = {
@@ -69,12 +76,19 @@ export async function GET(): Promise<NextResponse> {
       ? 'unhealthy'
       : 'degraded';
 
-  const health: HealthStatus = {
+  recordRequest(Date.now() - start, overallStatus === 'unhealthy');
+
+  const health: HealthStatus & {
+    metrics: ReturnType<typeof getMetricsSnapshot>;
+    errorRate: number;
+  } = {
     status: overallStatus,
     timestamp: new Date().toISOString(),
-    version: '0.1.0',
+    version: APP_VERSION,
     uptime: process.uptime(),
     checks,
+    metrics: getMetricsSnapshot(),
+    errorRate: getErrorRate(),
   };
 
   const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;

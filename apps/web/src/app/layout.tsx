@@ -9,15 +9,7 @@ export const metadata: Metadata = {
   },
   description:
     'Real-time blockchain intelligence platform for the Stellar ecosystem. Monitor payments, smart contracts, DEX activity, NFTs, and more.',
-  keywords: [
-    'Stellar',
-    'blockchain',
-    'intelligence',
-    'monitoring',
-    'Soroban',
-    'crypto',
-    'web3',
-  ],
+  keywords: ['Stellar', 'blockchain', 'intelligence', 'monitoring', 'Soroban', 'crypto', 'web3'],
   authors: [{ name: 'MizpahPulse' }],
   openGraph: {
     title: 'MizpahPulse — Stellar Blockchain Intelligence',

@@ -40,12 +40,18 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {['Payment events', 'Contract invocations', 'DEX trades', 'NFT activity'].map((label) => (
-                <label key={label} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
-                  <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
-                </label>
-              ))}
+              {['Payment events', 'Contract invocations', 'DEX trades', 'NFT activity'].map(
+                (label) => (
+                  <label key={label} className="flex items-center justify-between">
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    />
+                  </label>
+                ),
+              )}
             </div>
           </CardContent>
         </Card>
@@ -78,7 +84,10 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <label className="flex items-center justify-between">
                 <span className="text-sm text-slate-700 dark:text-slate-300">Dark Mode</span>
-                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                />
               </label>
             </div>
           </CardContent>

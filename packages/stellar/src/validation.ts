@@ -1,15 +1,27 @@
 import { StrKey } from '@stellar/stellar-sdk';
 
 export function isValidStellarAddress(address: string): boolean {
-  try { return StrKey.isValidEd25519PublicKey(address); } catch { return false; }
+  try {
+    return StrKey.isValidEd25519PublicKey(address);
+  } catch {
+    return false;
+  }
 }
 
 export function isValidSecretKey(secret: string): boolean {
-  try { return StrKey.isValidEd25519SecretSeed(secret); } catch { return false; }
+  try {
+    return StrKey.isValidEd25519SecretSeed(secret);
+  } catch {
+    return false;
+  }
 }
 
 export function isValidContractId(id: string): boolean {
-  try { return StrKey.isValidContract(id); } catch { return false; }
+  try {
+    return StrKey.isValidContract(id);
+  } catch {
+    return false;
+  }
 }
 
 export function isValidTxHash(hash: string): boolean {

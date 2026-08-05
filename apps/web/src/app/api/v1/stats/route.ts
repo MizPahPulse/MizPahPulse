@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { successResponse, errorResponse, ErrorCode } from '@/lib/api-errors';
+import { logger } from '@/lib/logger';
+import { recordRequest } from '@/lib/monitoring';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,17 +45,21 @@ export async function GET() {
             accountId: true,
           },
         }),
-        prisma.event.groupBy({
-          by: ['accountId'],
-          _count: true,
-          orderBy: { _count: { accountId: 'desc' } },
-          take: 1,
-        }).then((r) => r[0]?._count ?? 0),
-        prisma.event.groupBy({
-          by: ['contractId'],
-          where: { contractId: { not: null } },
-          _count: true,
-        }).then((r) => r.length),
+        prisma.event
+          .groupBy({
+            by: ['accountId'],
+            _count: true,
+            orderBy: { _count: { accountId: 'desc' } },
+            take: 1,
+          })
+          .then((r) => r[0]?._count ?? 0),
+        prisma.event
+          .groupBy({
+            by: ['contractId'],
+            where: { contractId: { not: null } },
+            _count: true,
+          })
+          .then((r) => r.length),
       ]);
 
     const stats = {
@@ -74,7 +80,8 @@ export async function GET() {
 
     return successResponse(stats, 200, { cached: false });
   } catch (error) {
-    console.error('[API] Stats error:', error);
+    logger.error('[API] Stats error:', error);
+    recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch statistics');
   }
 }

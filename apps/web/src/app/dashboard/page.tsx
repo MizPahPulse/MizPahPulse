@@ -3,14 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, cn, Spinner } from '@mizpah-pulse/ui';
-import {
-  Activity,
-  ArrowLeftRight,
-  FileCode,
-  Send,
-  TrendingUp,
-  Wallet,
-} from 'lucide-react';
+import { Activity, ArrowLeftRight, FileCode, Send, TrendingUp, Wallet } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 
@@ -36,11 +29,41 @@ const FALLBACK_STATS: DashboardStats = {
   uniqueAccounts: 156,
   trackedContracts: 12,
   recentActivity: [
-    { id: '1', eventType: 'PAYMENT', category: 'PAYMENT', timestamp: new Date(Date.now() - 2000).toISOString(), accountId: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
-    { id: '2', eventType: 'DEX_TRADE', category: 'DEX', timestamp: new Date(Date.now() - 5000).toISOString(), accountId: 'GDEF1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
-    { id: '3', eventType: 'SOROBAN_INVOKE', category: 'CONTRACT', timestamp: new Date(Date.now() - 8000).toISOString(), accountId: 'GHIJ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
-    { id: '4', eventType: 'NFT_TRANSFER', category: 'NFT', timestamp: new Date(Date.now() - 12000).toISOString(), accountId: 'GKLM1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
-    { id: '5', eventType: 'CREATE_ACCOUNT', category: 'ACCOUNT', timestamp: new Date(Date.now() - 15000).toISOString(), accountId: 'GNOP1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+    {
+      id: '1',
+      eventType: 'PAYMENT',
+      category: 'PAYMENT',
+      timestamp: new Date(Date.now() - 2000).toISOString(),
+      accountId: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    },
+    {
+      id: '2',
+      eventType: 'DEX_TRADE',
+      category: 'DEX',
+      timestamp: new Date(Date.now() - 5000).toISOString(),
+      accountId: 'GDEF1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    },
+    {
+      id: '3',
+      eventType: 'SOROBAN_INVOKE',
+      category: 'CONTRACT',
+      timestamp: new Date(Date.now() - 8000).toISOString(),
+      accountId: 'GHIJ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    },
+    {
+      id: '4',
+      eventType: 'NFT_TRANSFER',
+      category: 'NFT',
+      timestamp: new Date(Date.now() - 12000).toISOString(),
+      accountId: 'GKLM1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    },
+    {
+      id: '5',
+      eventType: 'CREATE_ACCOUNT',
+      category: 'ACCOUNT',
+      timestamp: new Date(Date.now() - 15000).toISOString(),
+      accountId: 'GNOP1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    },
   ],
 };
 
@@ -74,10 +97,30 @@ export default function DashboardPage() {
   }, []);
 
   const statCards = [
-    { label: 'Events (24h)', value: stats.eventsLast24h.toLocaleString(), icon: Activity, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950' },
-    { label: 'Total Events', value: stats.totalEvents.toLocaleString(), icon: ArrowLeftRight, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950' },
-    { label: 'Tracked Contracts', value: stats.trackedContracts.toLocaleString(), icon: FileCode, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950' },
-    { label: 'Unique Accounts', value: stats.uniqueAccounts.toLocaleString(), icon: Send, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
+    {
+      label: 'Events (24h)',
+      value: stats.eventsLast24h.toLocaleString(),
+      icon: Activity,
+      color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950',
+    },
+    {
+      label: 'Total Events',
+      value: stats.totalEvents.toLocaleString(),
+      icon: ArrowLeftRight,
+      color: 'text-purple-500 bg-purple-50 dark:bg-purple-950',
+    },
+    {
+      label: 'Tracked Contracts',
+      value: stats.trackedContracts.toLocaleString(),
+      icon: FileCode,
+      color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950',
+    },
+    {
+      label: 'Unique Accounts',
+      value: stats.uniqueAccounts.toLocaleString(),
+      icon: Send,
+      color: 'text-amber-500 bg-amber-50 dark:bg-amber-950',
+    },
   ];
 
   return (
@@ -117,10 +160,30 @@ export default function DashboardPage() {
       {/* Quick Links */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Live Feed', href: '/dashboard/feed', icon: Activity, desc: 'Real-time event stream' },
-          { label: 'Analytics', href: '/dashboard/analytics', icon: TrendingUp, desc: 'Charts & insights' },
-          { label: 'Wallets', href: '/dashboard/wallets', icon: Wallet, desc: 'Track your wallets' },
-          { label: 'Contracts', href: '/dashboard/contracts', icon: FileCode, desc: 'Smart contract monitor' },
+          {
+            label: 'Live Feed',
+            href: '/dashboard/feed',
+            icon: Activity,
+            desc: 'Real-time event stream',
+          },
+          {
+            label: 'Analytics',
+            href: '/dashboard/analytics',
+            icon: TrendingUp,
+            desc: 'Charts & insights',
+          },
+          {
+            label: 'Wallets',
+            href: '/dashboard/wallets',
+            icon: Wallet,
+            desc: 'Track your wallets',
+          },
+          {
+            label: 'Contracts',
+            href: '/dashboard/contracts',
+            icon: FileCode,
+            desc: 'Smart contract monitor',
+          },
         ].map((link) => (
           <Link key={link.href} href={link.href}>
             <Card padding="lg" hover>
@@ -153,10 +216,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
               >
                 <span
-                  className={cn(
-                    'h-2.5 w-2.5 flex-shrink-0 rounded-full',
-                    statusColors.success,
-                  )}
+                  className={cn('h-2.5 w-2.5 flex-shrink-0 rounded-full', statusColors.success)}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900 dark:text-slate-100">

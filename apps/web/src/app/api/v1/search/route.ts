@@ -3,6 +3,8 @@ import { prisma } from '@mizpah-pulse/database';
 import { isValidPublicKey, isValidContractId, isValidTransactionHash } from '@mizpah-pulse/stellar';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
+import { recordRequest } from '@/lib/monitoring';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +38,9 @@ export async function GET(request: Request) {
         where: { transactionHash: q },
       });
       if (tx) {
-        results.transactions = [{ hash: q, found: true, eventType: tx.eventType, timestamp: tx.timestamp }];
+        results.transactions = [
+          { hash: q, found: true, eventType: tx.eventType, timestamp: tx.timestamp },
+        ];
       }
     }
 
@@ -48,14 +52,18 @@ export async function GET(request: Request) {
         take: 5,
       });
       const txCount = await prisma.event.count({ where: { accountId: q } });
-      results.accounts = [{
-        publicKey: q,
-        eventCount: txCount,
-        recentEvents: accountEvents.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-          ...e,
-          ledgerSequence: e.ledgerSequence.toString(),
-        })),
-      }];
+      results.accounts = [
+        {
+          publicKey: q,
+          eventCount: txCount,
+          recentEvents: accountEvents.map(
+            (e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
+              ...e,
+              ledgerSequence: e.ledgerSequence.toString(),
+            }),
+          ),
+        },
+      ];
     }
 
     // Search contracts
@@ -85,10 +93,12 @@ export async function GET(request: Request) {
     });
 
     if (textMatches.length > 0) {
-      results.events = textMatches.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-        ...e,
-        ledgerSequence: e.ledgerSequence.toString(),
-      }));
+      results.events = textMatches.map(
+        (e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
+          ...e,
+          ledgerSequence: e.ledgerSequence.toString(),
+        }),
+      );
     }
 
     return successResponse({
@@ -97,7 +107,8 @@ export async function GET(request: Request) {
       totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
     });
   } catch (error) {
-    console.error('[API] Search error:', error);
+    logger.error('[API] Search error:', error);
+    recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Search failed');
   }
 }

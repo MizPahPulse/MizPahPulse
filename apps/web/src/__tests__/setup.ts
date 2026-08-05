@@ -27,7 +27,10 @@ vi.mock('next/link', () => ({
 // vitest-native, type-safe way to set env vars for tests.
 vi.stubEnv('NEXT_PUBLIC_STELLAR_NETWORK', 'TESTNET');
 vi.stubEnv('NEXT_PUBLIC_WS_URL', 'http://localhost:3001');
-vi.stubEnv('NEXT_PUBLIC_PULSE_CONTRACT_ID', 'CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C');
+vi.stubEnv(
+  'NEXT_PUBLIC_PULSE_CONTRACT_ID',
+  'CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C',
+);
 
 // Mock window.freighterApi (configurable so tests can delete/redefine it)
 Object.defineProperty(window, 'freighterApi', {

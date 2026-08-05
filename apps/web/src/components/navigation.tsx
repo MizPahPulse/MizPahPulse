@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@mizpah-pulse/ui';
+import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
 import {
   Activity,
   BarChart3,
@@ -85,7 +86,11 @@ export function Sidebar() {
         aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
         aria-expanded={mobileOpen}
       >
-        {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+        {mobileOpen ? (
+          <X className="h-5 w-5" aria-hidden="true" />
+        ) : (
+          <Menu className="h-5 w-5" aria-hidden="true" />
+        )}
       </button>
 
       {/* Sidebar */}
@@ -100,13 +105,18 @@ export function Sidebar() {
         )}
       >
         {/* Logo */}
-        <div className={cn('flex items-center gap-3 border-b border-slate-100 p-4 dark:border-slate-800', collapsed && 'justify-center')}>
+        <div
+          className={cn(
+            'flex items-center gap-3 border-b border-slate-100 p-4 dark:border-slate-800',
+            collapsed && 'justify-center',
+          )}
+        >
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
             <Radio className="h-4 w-4 text-white" />
           </div>
           {!collapsed && (
             <Link href="/" className="text-lg font-bold gradient-text">
-              MizpahPulse
+              {APP_NAME}
             </Link>
           )}
         </div>
@@ -133,7 +143,9 @@ export function Sidebar() {
                     <item.icon
                       className={cn(
                         'h-5 w-5 flex-shrink-0 transition-colors',
-                        isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300',
+                        isActive
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300',
                       )}
                     />
                     {!collapsed && <span>{item.label}</span>}
@@ -148,7 +160,12 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className={cn('border-t border-slate-100 p-3 dark:border-slate-800', collapsed && 'flex flex-col gap-2')}>
+        <div
+          className={cn(
+            'border-t border-slate-100 p-3 dark:border-slate-800',
+            collapsed && 'flex flex-col gap-2',
+          )}
+        >
           <button
             onClick={toggleCollapsed}
             className={cn(
@@ -211,7 +228,7 @@ export function Navbar() {
       <div className="flex items-center gap-4">
         <div className="hidden lg:block">
           <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            Stellar Blockchain Intelligence
+            {APP_DESCRIPTION}
           </h2>
         </div>
         {/* Connection status indicator */}
@@ -221,7 +238,9 @@ export function Navbar() {
               connectionStatus === 'online' ? 'bg-emerald-500' : 'bg-red-500'
             }`}
           />
-          <span className="text-slate-400">{connectionStatus === 'online' ? 'Online' : 'Offline'}</span>
+          <span className="text-slate-400">
+            {connectionStatus === 'online' ? 'Online' : 'Offline'}
+          </span>
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -230,7 +249,11 @@ export function Navbar() {
           className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
           aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {dark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+          {dark ? (
+            <Sun className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Moon className="h-5 w-5" aria-hidden="true" />
+          )}
         </button>
         <Link
           href="/dashboard/settings"

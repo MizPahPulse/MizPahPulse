@@ -35,9 +35,7 @@ export function recordRequest(durationMs: number, isError: boolean): void {
   const now = Date.now();
   metrics.lastMinuteTimestamps.push(now);
   // Clean up old entries
-  metrics.lastMinuteTimestamps = metrics.lastMinuteTimestamps.filter(
-    (t) => now - t < 60_000,
-  );
+  metrics.lastMinuteTimestamps = metrics.lastMinuteTimestamps.filter((t) => now - t < 60_000);
 }
 
 /**
