@@ -1,0 +1,21 @@
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 } as const;
+type LogLevel = keyof typeof LOG_LEVELS;
+
+const currentLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
+
+function log(level: LogLevel, msg: string, ...args: unknown[]) {
+  if (LOG_LEVELS[level] >= LOG_LEVELS[currentLevel]) {
+    const ts = new Date().toISOString();
+    const prefix = `[${ts}] [${level.toUpperCase()}]`;
+    if (level === 'error') console.error(prefix, msg, ...args);
+    else if (level === 'warn') console.warn(prefix, msg, ...args);
+    else console.log(prefix, msg, ...args);
+  }
+}
+
+export const logger = {
+  debug: (m: string, ...a: unknown[]) => log('debug', m, ...a),
+  info: (m: string, ...a: unknown[]) => log('info', m, ...a),
+  warn: (m: string, ...a: unknown[]) => log('warn', m, ...a),
+  error: (m: string, ...a: unknown[]) => log('error', m, ...a),
+};
