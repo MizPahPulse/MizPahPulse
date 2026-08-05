@@ -39,6 +39,28 @@ const statusDotColors: Record<string, string> = {
   info: 'bg-sky-400',
 };
 
+/** Sample events used by the simulation mode (keeps demos live without infra) */
+const SAMPLE_ACCOUNTS = [
+  'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'GDEF1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'GHIJ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'GKLM1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'GNOP1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+];
+
+const SAMPLE_TEMPLATES: Array<Omit<FeedEvent, 'id' | 'time' | 'timestamp'>> = [
+  { type: 'PAYMENT', category: 'PAYMENT', title: 'Payment: 125 XLM', from: 'GABC…XYZ', amount: '125 XLM', status: 'success' },
+  { type: 'DEX_TRADE', category: 'DEX', title: 'DEX Trade: USDC/XLM', from: 'GDEF…UVW', amount: '500 USDC', status: 'success' },
+  { type: 'SOROBAN_INVOKE', category: 'CONTRACT', title: 'Contract Call: swap()', from: 'GHIJ…RST', status: 'info' },
+  { type: 'NFT_TRANSFER', category: 'NFT', title: 'NFT Transfer: #1234', from: 'GKLM…NOP', to: 'GABC…XYZ', status: 'success' },
+  { type: 'CREATE_ACCOUNT', category: 'ACCOUNT', title: 'Account Created', from: 'GNOP…TUV', amount: '10 XLM', status: 'success' },
+  { type: 'TOKEN_TRANSFER', category: 'TOKEN', title: 'Token Transfer: 2,000 USDC', from: 'GQRW…VWX', amount: '2,000 USDC', status: 'success' },
+  { type: 'LIQUIDITY_POOL_DEPOSIT', category: 'LIQUIDITY', title: 'LP Deposit: XLM+USDC', from: 'GSTU…YZA', amount: '800 XLM', status: 'warning' },
+  { type: 'SOROBAN_DEPLOY', category: 'CONTRACT', title: 'Contract Deployed', from: 'GBCD…EFG', status: 'info' },
+  { type: 'MANAGE_SELL_OFFER', category: 'DEX', title: 'Sell Offer: 300 XLM', from: 'GHIJ…RST', amount: '300 XLM', status: 'success' },
+  { type: 'CLAWBACK', category: 'TOKEN', title: 'Clawback: 50 USDC', from: 'GKLM…NOP', amount: '50 USDC', status: 'error' },
+];
+
 const categoryVariantMap: Record<string, string> = {
   PAYMENT: 'success',
   ACCOUNT: 'info',
@@ -116,6 +138,7 @@ export default function FeedPage() {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [autoScroll, setAutoScroll] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
 
@@ -146,6 +169,28 @@ export default function FeedPage() {
       return updated.slice(0, MAX_EVENT_BUFFER);
     });
   }, [lastEvent]);
+
+  // Simulation mode: emit realistic sample events when no WebSocket is available
+  useEffect(() => {
+    if (!simulating) return;
+    const interval = setInterval(() => {
+      const template = SAMPLE_TEMPLATES[Math.floor(Math.random() * SAMPLE_TEMPLATES.length)];
+      const account = SAMPLE_ACCOUNTS[Math.floor(Math.random() * SAMPLE_ACCOUNTS.length)];
+      setEvents((prev) =>
+        [
+          {
+            ...template,
+            id: `sim-${++idCounter.current}-${Date.now()}`,
+            from: template.from.startsWith('G') ? truncateAddress(template.from) : account.slice(0, 4) + '…' + account.slice(-3),
+            time: 'just now',
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ].slice(0, MAX_EVENT_BUFFER),
+      );
+    }, 2_500);
+    return () => clearInterval(interval);
+  }, [simulating]);
 
   // Update relative timestamps every 10 seconds
   useEffect(() => {
@@ -205,6 +250,21 @@ export default function FeedPage() {
           >
             {isPaused ? 'Paused' : 'Live'}
           </button>
+          {!wsConnected && events.length === 0 && (
+            <button
+              onClick={() => setSimulating((s) => !s)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                simulating
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800',
+              )}
+              aria-pressed={simulating}
+            >
+              <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+              {simulating ? 'Simulating…' : 'Simulate events'}
+            </button>
+          )}
           <button
             onClick={() => setAutoScroll(!autoScroll)}
             className={cn(
