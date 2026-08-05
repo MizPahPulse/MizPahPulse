@@ -1,0 +1,2 @@
+export function reportError(error: Error, context?: Record<string, unknown>): void { console.error('[ErrorReporter]', error.message, context || {}); }
+export function wrapWithErrorReporting<T extends (...args: unknown[]) => unknown>(fn: T, name: string): T { return ((...args: unknown[]) => { try { return fn(...args); } catch (e) { reportError(e instanceof Error ? e : new Error(String(e)), { function: name, args: String(args) }); throw e; } }) as unknown as T; }
