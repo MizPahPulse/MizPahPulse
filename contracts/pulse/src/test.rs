@@ -2,6 +2,7 @@
 
 use super::*;
 use soroban_sdk::testutils::Events;
+use soroban_sdk::testutils::Ledger;
 use soroban_sdk::Env;
 
 fn deploy(env: &Env) -> (Address, PulseContractClient) {
@@ -405,6 +406,41 @@ fn test_rate_limited_pulse_with_cooldown() {
     // Second pulse within cooldown should fail
     let result = client.try_rate_limited_pulse(&symbol_short!("alice"), &60u64);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_time_locked_pulse_rejects_before_deadline() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // Set the ledger to a concrete time so the deadline is deterministic.
+    env.ledger().set_timestamp(1_000_000);
+
+    let result = client.try_time_locked_pulse(&symbol_short!("alice"), &1_500_000u64);
+    // try_* returns Result<T, Result<PulseError, InvokeError>>; a typed
+    // contract error surfaces as Ok(PulseError::...) inside the outer Err.
+    assert_eq!(result.unwrap_err(), Ok(PulseError::TimeLockNotReady));
+
+    // After the deadline the pulse fires normally.
+    env.ledger().set_timestamp(2_000_000);
+    let count = client.time_locked_pulse(&symbol_short!("alice"), &1_500_000u64);
+    assert_eq!(count, 1u32);
+}
+
+#[test]
+fn test_rate_limited_pulse_reports_cooldown_error() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    env.ledger().set_timestamp(1_000_000);
+    let result = client.rate_limited_pulse(&symbol_short!("alice"), &60u64);
+    assert_eq!(result, 1u32);
+
+    // Second pulse within the cooldown must surface the dedicated error.
+    let result = client.try_rate_limited_pulse(&symbol_short!("alice"), &60u64);
+    assert_eq!(result.unwrap_err(), Ok(PulseError::CooldownActive));
 }
 
 #[test]

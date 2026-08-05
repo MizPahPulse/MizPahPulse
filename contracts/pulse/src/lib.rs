@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Env, Symbol, log,
-    Address, Val, Vec, IntoVal,
+    contract, contracterror, contractimpl, contracttype, log, symbol_short, Address, Env, IntoVal,
+    Symbol, Val, Vec,
 };
 
 /// ──────────────────────────────────────────────
@@ -23,6 +23,10 @@ pub enum PulseError {
     InvalidTargetContract = 5,
     /// Batch size exceeds maximum allowed
     BatchTooLarge = 6,
+    /// Time-locked operation attempted before its scheduled timestamp
+    TimeLockNotReady = 7,
+    /// Rate-limited operation attempted within the active cooldown window
+    CooldownActive = 8,
 }
 
 /// Counter for tracking pulse events
@@ -123,7 +127,9 @@ impl PulseContract {
 
     /// Get full contract metadata
     pub fn get_meta(env: Env) -> Option<ContractMeta> {
-        env.storage().instance().get::<Symbol, ContractMeta>(&META_KEY)
+        env.storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
     }
 
     /// Transfer ownership to a new address (only current owner)
@@ -216,7 +222,12 @@ impl PulseContract {
         let signer_data = (signers, threshold);
         env.storage().instance().set(&MULTISIG_KEY, &signer_data);
 
-        log!(&env, "Multi-sig configured: {} signers, threshold {}", signer_count, threshold);
+        log!(
+            &env,
+            "Multi-sig configured: {} signers, threshold {}",
+            signer_count,
+            threshold
+        );
         Ok(())
     }
 
@@ -272,7 +283,7 @@ impl PulseContract {
 
         let now = env.ledger().timestamp();
         if now < execute_after {
-            return Err(PulseError::InvalidCaller); // Using InvalidCaller for "not yet ready"
+            return Err(PulseError::TimeLockNotReady);
         }
 
         Self::pulse(env, caller)
@@ -304,7 +315,7 @@ impl PulseContract {
             let now = env.ledger().timestamp();
             let elapsed = now.saturating_sub(last_time);
             if elapsed < cooldown_seconds {
-                return Err(PulseError::ContractPaused); // Repurpose error for cooldown
+                return Err(PulseError::CooldownActive);
             }
         }
 
@@ -341,9 +352,10 @@ impl PulseContract {
     /// Pause the contract (only owner). When paused, pulse() and broadcast_pulse() will fail.
     pub fn pause(env: Env) -> Result<(), PulseError> {
         let mut meta = get_or_create_meta(&env);
-        meta.owner.require_auth();            if meta.paused {
-                return Ok(());
-            }
+        meta.owner.require_auth();
+        if meta.paused {
+            return Ok(());
+        }
 
         meta.paused = true;
         env.storage().instance().set(&META_KEY, &meta);
@@ -356,9 +368,10 @@ impl PulseContract {
     /// Unpause the contract (only owner)
     pub fn unpause(env: Env) -> Result<(), PulseError> {
         let mut meta = get_or_create_meta(&env);
-        meta.owner.require_auth();            if !meta.paused {
-                return Ok(());
-            }
+        meta.owner.require_auth();
+        if !meta.paused {
+            return Ok(());
+        }
 
         meta.paused = false;
         env.storage().instance().set(&META_KEY, &meta);
@@ -404,7 +417,10 @@ impl PulseContract {
             });
 
         // Increment with overflow protection
-        data.count = data.count.checked_add(1).ok_or(PulseError::CounterOverflow)?;
+        data.count = data
+            .count
+            .checked_add(1)
+            .ok_or(PulseError::CounterOverflow)?;
         data.last_caller = Some(caller.clone());
         data.last_pulse_at = Some(env.ledger().timestamp());
 
@@ -412,10 +428,8 @@ impl PulseContract {
         env.storage().instance().set(&PULSE_KEY, &data);
 
         // Emit a pulse event with detailed topics for indexing
-        env.events().publish(
-            (TOPIC_PULSE, TOPIC_FIRED),
-            (data.count, caller.clone()),
-        );
+        env.events()
+            .publish((TOPIC_PULSE, TOPIC_FIRED), (data.count, caller.clone()));
 
         log!(&env, "Pulse #{} fired by {}", data.count, caller);
 
@@ -532,12 +546,13 @@ impl PulseContract {
     }
 
     /// Receive a pulse from another PulseContract instance.
-    pub fn on_pulse_received(
-        env: Env,
-        pulse_count: u32,
-        origin_caller: Symbol,
-    ) -> Symbol {
-        log!(&env, "Received pulse #{} from {}", pulse_count, origin_caller);
+    pub fn on_pulse_received(env: Env, pulse_count: u32, origin_caller: Symbol) -> Symbol {
+        log!(
+            &env,
+            "Received pulse #{} from {}",
+            pulse_count,
+            origin_caller
+        );
 
         // Store the last received pulse
         env.storage()
