@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@mizpah-pulse/ui';
@@ -24,6 +24,22 @@ import {
   Radio,
 } from 'lucide-react';
 
+const DARK_MODE_KEY = 'mizpah-pulse:dark-mode';
+const SIDEBAR_COLLAPSED_KEY = 'mizpah-pulse:sidebar-collapsed';
+
+function getInitialDarkMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const stored = localStorage.getItem(DARK_MODE_KEY);
+  if (stored !== null) return stored === 'true';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getInitialSidebarState(): boolean {
+  if (typeof window === 'undefined') return false;
+  const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+  return stored === 'true';
+}
+
 const navigationItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/dashboard/feed', label: 'Live Feed', icon: Activity },
@@ -38,10 +54,18 @@ const navigationItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(getInitialSidebarState);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const toggleCollapsed = useCallback(() => setCollapsed((p) => !p), []);
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((p) => {
+      const next = !p;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      }
+      return next;
+    });
+  }, []);
   const toggleMobile = useCallback(() => setMobileOpen((p) => !p), []);
 
   return (
@@ -159,15 +183,15 @@ export function Sidebar() {
 }
 
 export function Navbar() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(getInitialDarkMode);
 
-  const toggleDark = () => {
-    setDark((d) => {
-      const next = !d;
-      document.documentElement.classList.toggle('dark', next);
-      return next;
-    });
-  };
+  // Apply dark mode on mount and persist changes
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem(DARK_MODE_KEY, String(dark));
+  }, [dark]);
+
+  const toggleDark = () => setDark((d) => !d);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/80">
