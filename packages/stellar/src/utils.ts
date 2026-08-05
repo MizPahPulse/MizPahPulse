@@ -1,4 +1,4 @@
-import { Keypair, StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import { getNetworkConfig } from './config';
 import type { StellarNetwork } from '@mizpah-pulse/types';
 
@@ -98,5 +98,5 @@ export function stroopsToXlm(stroops: string | number): string {
  * Convert XLM to stroops
  */
 export function xlmToStroops(xlm: string | number): string {
-  return (Math.round(Number(xlm) * 10_000_000)).toString();
+  return Math.round(Number(xlm) * 10_000_000).toString();
 }
