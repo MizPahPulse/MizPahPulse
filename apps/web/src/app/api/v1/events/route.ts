@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { EventFilterSchema } from '@mizpah-pulse/types';
+import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -12,6 +14,14 @@ export const dynamic = 'force-dynamic';
  * Query processed blockchain events with filtering, pagination, and sorting.
  */
 export async function GET(request: Request) {
+  // Apply rate limiting: 60 requests per minute per IP
+  const rateLimitResult = await rateLimit(request, {
+    maxRequests: 60,
+    windowMs: 60_000,
+    keyPrefix: 'events',
+  });
+  if (rateLimitResult) return rateLimitResult;
+
   try {
     const { searchParams } = new URL(request.url);
 
@@ -27,7 +37,7 @@ export async function GET(request: Request) {
       minLedger: searchParams.get('minLedger') ? parseInt(searchParams.get('minLedger')!) : undefined,
       maxLedger: searchParams.get('maxLedger') ? parseInt(searchParams.get('maxLedger')!) : undefined,
       searchQuery: searchParams.get('q') || undefined,
-      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50,
+      limit: searchParams.get('limit') ? Math.min(parseInt(searchParams.get('limit')!), 100) : 50,
       cursor: searchParams.get('cursor') || undefined,
       sortOrder: (searchParams.get('sort') as 'asc' | 'desc') || 'desc',
     };
@@ -68,35 +78,26 @@ export async function GET(request: Request) {
     const hasMore = events.length > filters.limit;
     const data = hasMore ? events.slice(0, filters.limit) : events;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        events: data.map((e: { id: string; payload: unknown; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-          ...e,
-          ledgerSequence: e.ledgerSequence.toString(),
-          payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
-        })),
-        total,
-        limit: filters.limit,
-        cursor: hasMore ? data[data.length - 1]?.id : undefined,
-        hasMore,
-      },
-      meta: {
-        timestamp: new Date().toISOString(),
-        version: 'v1',
-      },
+    return successResponse({
+      events: data.map((e: { id: string; payload: unknown; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
+        ...e,
+        ledgerSequence: e.ledgerSequence.toString(),
+        payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
+      })),
+      total,
+      limit: filters.limit,
+      cursor: hasMore ? data[data.length - 1]?.id : undefined,
+      hasMore,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid filter parameters', details: error.flatten() } },
-        { status: 400 },
+      return errorResponse(
+        ErrorCode.VALIDATION_ERROR,
+        'Invalid filter parameters',
+        error.flatten() as unknown as Record<string, unknown>,
       );
     }
     console.error('[API] Events error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch events' } },
-      { status: 500 },
-    );
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch events');
   }
 }
