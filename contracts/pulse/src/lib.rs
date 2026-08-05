@@ -1,5 +1,29 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbol, log, Address, Val, Vec, IntoVal};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Env, Symbol, log,
+    Address, Val, Vec, IntoVal,
+};
+
+/// ──────────────────────────────────────────────
+/// Error Codes
+/// ──────────────────────────────────────────────
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum PulseError {
+    /// Caller is not the contract owner
+    NotAuthorized = 1,
+    /// Contract is paused
+    ContractPaused = 2,
+    /// Invalid caller symbol (empty)
+    InvalidCaller = 3,
+    /// Arithmetic overflow in counter
+    CounterOverflow = 4,
+    /// Target contract address is invalid
+    InvalidTargetContract = 5,
+    /// Batch size exceeds maximum allowed
+    BatchTooLarge = 6,
+}
 
 /// Counter for tracking pulse events
 #[contracttype]
@@ -7,22 +31,178 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Env, Symbo
 pub struct PulseData {
     pub count: u32,
     pub last_caller: Option<Symbol>,
+    pub last_pulse_at: Option<u64>,
+}
+
+/// Contract metadata
+#[contracttype]
+#[derive(Clone)]
+pub struct ContractMeta {
+    pub owner: Address,
+    pub paused: bool,
+    pub version: u32,
 }
 
 /// Key for storing pulse data in contract storage
 const PULSE_KEY: Symbol = symbol_short!("PULSE");
 
-/// Constants for cross-contract communication
-const PULSE_RECEIVER_TOPIC: Symbol = symbol_short!("receiver");
+/// Key for storing contract metadata
+const META_KEY: Symbol = symbol_short!("META");
+
+/// Key for storing the last received pulse
+const RX_PULSE_KEY: Symbol = symbol_short!("RX_PULSE");
+
+/// ──────────────────────────────────────────────
+/// Event Topics
+/// ──────────────────────────────────────────────
+const TOPIC_PULSE: Symbol = symbol_short!("pulse");
+const TOPIC_FIRED: Symbol = symbol_short!("fired");
+const TOPIC_RECEIVER: Symbol = symbol_short!("receiver");
+const TOPIC_BROADCAST: Symbol = symbol_short!("broadcast");
+const TOPIC_ACK: Symbol = symbol_short!("ack");
+const TOPIC_OWNER_CHANGE: Symbol = symbol_short!("owner_chg");
+const TOPIC_PAUSE: Symbol = symbol_short!("paused");
+const TOPIC_UNPAUSE: Symbol = symbol_short!("unpaused");
+const TOPIC_BATCH: Symbol = symbol_short!("batch");
+
+/// Maximum batch size for batch_pulse
+const MAX_BATCH_SIZE: u32 = 50;
 
 #[contract]
 pub struct PulseContract;
 
 #[contractimpl]
 impl PulseContract {
+    /// ── Initialization ────────────────────────
+
+    /// Initialize the contract with an owner. Must be called once after deployment.
+    pub fn initialize(env: Env, owner: Address) -> Result<(), PulseError> {
+        // Only allow initialization once
+        if env.storage().instance().has(&META_KEY) {
+            return Ok(());
+        }
+
+        let meta = ContractMeta {
+            owner,
+            paused: false,
+            version: 1,
+        };
+
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events().publish(
+            (symbol_short!("contract"), symbol_short!("init")),
+            meta.version,
+        );
+
+        log!(&env, "PulseContract initialized v{}", meta.version);
+        Ok(())
+    }
+
+    /// ── Ownership ─────────────────────────────
+
+    /// Get the current contract owner
+    pub fn owner(env: Env) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
+            .map(|m| m.owner)
+    }
+
+    /// Get full contract metadata
+    pub fn get_meta(env: Env) -> Option<ContractMeta> {
+        env.storage().instance().get::<Symbol, ContractMeta>(&META_KEY)
+    }
+
+    /// Transfer ownership to a new address (only current owner)
+    pub fn transfer_ownership(env: Env, new_owner: Address) -> Result<(), PulseError> {
+        let mut meta = env
+            .storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
+            .unwrap_or(ContractMeta {
+                owner: new_owner.clone(),
+                paused: false,
+                version: 1,
+            });
+
+        // Verify caller is current owner
+        meta.owner.require_auth();
+
+        let old_owner = meta.owner.clone();
+        meta.owner = new_owner.clone();
+
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events().publish(
+            (TOPIC_OWNER_CHANGE, symbol_short!("transfer")),
+            (old_owner, meta.owner.clone()),
+        );
+
+        log!(&env, "Ownership transferred to {}", new_owner);
+        Ok(())
+    }
+
+    /// ── Pausability ───────────────────────────
+
+    /// Pause the contract (only owner). When paused, pulse() and broadcast_pulse() will fail.
+    pub fn pause(env: Env) -> Result<(), PulseError> {
+        let mut meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        if meta.paused {
+            return Ok(()); // Already paused — idempotent
+        }
+
+        meta.paused = true;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events().publish((TOPIC_PAUSE,), ());
+        log!(&env, "Contract paused");
+        Ok(())
+    }
+
+    /// Unpause the contract (only owner)
+    pub fn unpause(env: Env) -> Result<(), PulseError> {
+        let mut meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        if !meta.paused {
+            return Ok(()); // Already unpaused — idempotent
+        }
+
+        meta.paused = false;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events().publish((TOPIC_UNPAUSE,), ());
+        log!(&env, "Contract unpaused");
+        Ok(())
+    }
+
+    /// Check if the contract is paused
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
+            .map(|m| m.paused)
+            .unwrap_or(false)
+    }
+
+    /// ── Core Pulse ────────────────────────────
+
     /// Pulse — increments the counter and emits an event.
     /// Each call records the caller and increments the count.
-    pub fn pulse(env: Env, caller: Symbol) -> u32 {
+    pub fn pulse(env: Env, caller: Symbol) -> Result<u32, PulseError> {
+        ensure_not_paused(&env)?;
+
+        // Validate caller: reject empty or zero-length symbols
+        {
+            let empty = Symbol::new(&env, "");
+            if caller == empty {
+                return Err(PulseError::InvalidCaller);
+            }
+        }
+
         // Load existing pulse data or create new
         let mut data = env
             .storage()
@@ -31,25 +211,26 @@ impl PulseContract {
             .unwrap_or(PulseData {
                 count: 0,
                 last_caller: None,
+                last_pulse_at: None,
             });
 
-        // Increment and update
-        data.count += 1;
+        // Increment with overflow protection
+        data.count = data.count.checked_add(1).ok_or(PulseError::CounterOverflow)?;
         data.last_caller = Some(caller.clone());
+        data.last_pulse_at = Some(env.ledger().timestamp());
 
         // Store updated data
         env.storage().instance().set(&PULSE_KEY, &data);
 
-        // Emit a pulse event that can be monitored by MizpahPulse
-        env.events()
-            .publish(
-                (symbol_short!("pulse"), symbol_short!("fired")),
-                (data.count, caller.clone()),
-            );
+        // Emit a pulse event with detailed topics for indexing
+        env.events().publish(
+            (TOPIC_PULSE, TOPIC_FIRED),
+            (data.count, caller.clone()),
+        );
 
         log!(&env, "Pulse #{} fired by {}", data.count, caller);
 
-        data.count
+        Ok(data.count)
     }
 
     /// Get the current pulse count without modifying state.
@@ -61,7 +242,7 @@ impl PulseContract {
             .unwrap_or(0)
     }
 
-    /// Get the full pulse data (count + last caller).
+    /// Get the full pulse data (count + last caller + timestamp).
     pub fn get_pulse_data(env: Env) -> PulseData {
         env.storage()
             .instance()
@@ -69,38 +250,85 @@ impl PulseContract {
             .unwrap_or(PulseData {
                 count: 0,
                 last_caller: None,
+                last_pulse_at: None,
             })
     }
 
-    /// ──────────────────────────────────────────────
-    /// Inter-contract communication: Broadcast pulse to another contract
-    /// ──────────────────────────────────────────────
+    /// ── Batch Operations ──────────────────────
+
+    /// Fire multiple pulses in a single invocation. This is more gas-efficient
+    /// than calling pulse() N times separately.
     ///
-    /// Calls another contract's `on_pulse_received` function, passing the
-    /// pulse count and caller symbol. This demonstrates cross-contract
-    /// invocation patterns essential for Soroban composability.
-    ///
-    /// @param target_contract - Address of the receiver contract
-    /// @param caller - Name of the caller for tracking
-    /// @returns (own_pulse_count, receiver_result) tuple
-    pub fn broadcast_pulse(env: Env, target_contract: Address, caller: Symbol) -> (u32, Val) {
+    /// @param callers - Array of caller symbols (max 50)
+    /// @returns Final pulse count after all increments
+    pub fn batch_pulse(env: Env, callers: Vec<Symbol>) -> Result<u32, PulseError> {
+        ensure_not_paused(&env)?;
+
+        if callers.is_empty() {
+            return Err(PulseError::InvalidCaller);
+        }
+        if callers.len() > MAX_BATCH_SIZE as u32 {
+            return Err(PulseError::BatchTooLarge);
+        }
+
+        let mut data = env
+            .storage()
+            .instance()
+            .get::<Symbol, PulseData>(&PULSE_KEY)
+            .unwrap_or(PulseData {
+                count: 0,
+                last_caller: None,
+                last_pulse_at: None,
+            });
+
+        let batch_size = callers.len() as u32;
+        data.count = data
+            .count
+            .checked_add(batch_size)
+            .ok_or(PulseError::CounterOverflow)?;
+        let last = callers.last().unwrap();
+        data.last_caller = Some(last.clone());
+        data.last_pulse_at = Some(env.ledger().timestamp());
+
+        env.storage().instance().set(&PULSE_KEY, &data);
+
+        // Emit batch event (single event for all pulses)
+        env.events()
+            .publish((TOPIC_PULSE, TOPIC_BATCH), (batch_size, data.count));
+
+        log!(
+            &env,
+            "Batch pulse: {} callers, total count: {}",
+            batch_size,
+            data.count
+        );
+
+        Ok(data.count)
+    }
+
+    /// ── Inter-Contract Communication ──────────
+
+    /// Broadcast pulse to another contract.
+    pub fn broadcast_pulse(
+        env: Env,
+        target_contract: Address,
+        caller: Symbol,
+    ) -> Result<(u32, Val), PulseError> {
+        ensure_not_paused(&env)?;
+
         // First, fire our own pulse
-        let own_count = Self::pulse(env.clone(), caller.clone());
+        let own_count = Self::pulse(env.clone(), caller.clone())?;
 
         // Then, invoke the target contract via inter-contract call
-        // This demonstrates cross-contract communication
         let receiver_result: Val = env.invoke_contract(
             &target_contract,
             &Symbol::new(&env, "on_pulse_received"),
-            Vec::from_array(
-                &env,
-                [own_count.into_val(&env), caller.into_val(&env)],
-            ),
+            Vec::from_array(&env, [own_count.into_val(&env), caller.into_val(&env)]),
         );
 
-        // Emit a cross-contract event for monitoring (clone since target_contract is used in log below)
+        // Emit a cross-contract event for monitoring
         env.events().publish(
-            (PULSE_RECEIVER_TOPIC, Symbol::new(&env, "broadcast")),
+            (TOPIC_RECEIVER, TOPIC_BROADCAST),
             (own_count, target_contract.clone()),
         );
 
@@ -111,31 +339,25 @@ impl PulseContract {
             target_contract
         );
 
-        (own_count, receiver_result)
+        Ok((own_count, receiver_result))
     }
 
     /// Receive a pulse from another PulseContract instance.
-    /// This is the receiver endpoint for inter-contract communication.
-    /// Stores the last received pulse data and emits an acknowledgment event.
-    pub fn on_pulse_received(env: Env, pulse_count: u32, origin_caller: Symbol) -> Symbol {
-        log!(
-            &env,
-            "Received pulse #{} from {}",
-            pulse_count,
-            origin_caller
-        );
+    pub fn on_pulse_received(
+        env: Env,
+        pulse_count: u32,
+        origin_caller: Symbol,
+    ) -> Symbol {
+        log!(&env, "Received pulse #{} from {}", pulse_count, origin_caller);
 
         // Store the last received pulse
-        env.storage().instance().set(
-            &symbol_short!("RX_PULSE"),
-            &(pulse_count, origin_caller.clone()),
-        );
+        env.storage()
+            .instance()
+            .set(&RX_PULSE_KEY, &(pulse_count, origin_caller.clone()));
 
         // Emit acknowledgment event
-        env.events().publish(
-            (symbol_short!("receiver"), symbol_short!("ack")),
-            (pulse_count, origin_caller.clone()),
-        );
+        env.events()
+            .publish((TOPIC_RECEIVER, TOPIC_ACK), (pulse_count, origin_caller));
 
         symbol_short!("ACK")
     }
@@ -144,8 +366,37 @@ impl PulseContract {
     pub fn get_last_received(env: Env) -> Option<(u32, Symbol)> {
         env.storage()
             .instance()
-            .get::<Symbol, (u32, Symbol)>(&symbol_short!("RX_PULSE"))
+            .get::<Symbol, (u32, Symbol)>(&RX_PULSE_KEY)
     }
+}
+
+/// ──────────────────────────────────────────────
+/// Internal Helpers
+/// ──────────────────────────────────────────────
+
+fn get_or_create_meta(env: &Env) -> ContractMeta {
+    env.storage()
+        .instance()
+        .get::<Symbol, ContractMeta>(&META_KEY)
+        .unwrap_or(ContractMeta {
+            owner: env.current_contract_address(),
+            paused: false,
+            version: 1,
+        })
+}
+
+fn ensure_not_paused(env: &Env) -> Result<(), PulseError> {
+    let paused = env
+        .storage()
+        .instance()
+        .get::<Symbol, ContractMeta>(&META_KEY)
+        .map(|m| m.paused)
+        .unwrap_or(false);
+
+    if paused {
+        return Err(PulseError::ContractPaused);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
