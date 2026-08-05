@@ -38,6 +38,10 @@ const rawEventQueue = new Queue<RawStellarEvent>(RAW_EVENT_QUEUE, {
 const processedEventQueue = new Queue(PROCESSED_EVENT_QUEUE, { connection });
 const deadLetterQueue = new Queue(DEAD_LETTER_QUEUE, { connection });
 
+// Redis Pub/Sub client (lazy init in main)
+let pubClient: Awaited<ReturnType<typeof import('ioredis').default>> | null = null;
+const REDIS_CHANNEL = 'mizpah-pulse:events';
+
 // Track active timers for graceful shutdown
 const activeTimers: ReturnType<typeof setInterval>[] = [];
 
@@ -193,6 +197,29 @@ const eventProcessor = new Worker<RawStellarEvent>(
 
       console.log(`[Processor] Stored event: ${stored.id} (${eventType})`);
 
+      // Publish to Redis Pub/Sub for real-time WebSocket broadcast
+      try {
+        await pubClient?.publish(
+          REDIS_CHANNEL,
+          JSON.stringify({
+            channel: 'feed:all',
+            eventType: stored.eventType,
+            data: {
+              eventId: stored.id,
+              category: stored.category,
+              accountId: stored.accountId,
+              amount: stored.amount,
+              assetCode: stored.assetCode,
+              timestamp: stored.timestamp,
+            },
+            timestamp: new Date().toISOString(),
+            sequence: Date.now(),
+          }),
+        );
+      } catch (pubErr) {
+        console.error('[Processor] Redis publish error:', pubErr);
+      }
+
       // Queue for downstream processing (notifications, webhooks, WebSocket broadcast)
       await processedEventQueue.add(`processed-${stored.id}`, {
         eventId: stored.id,
@@ -245,6 +272,11 @@ async function main() {
     await redis.ping();
     await redis.quit();
     console.log('[Ingester] Redis connected');
+
+    // Initialize Redis Pub/Sub client for broadcasting processed events
+    pubClient = new Redis(REDIS_URL);
+    await pubClient.ping();
+    console.log('[Ingester] Redis Pub/Sub connected');
   } catch (err) {
     console.error('[Ingester] Redis connection failed:', err);
     process.exit(1);
@@ -266,6 +298,7 @@ async function main() {
   const shutdown = async () => {
     console.log('[Ingester] Shutting down...');
     activeTimers.forEach((t) => clearInterval(t));
+    await pubClient?.quit();
     await rawEventQueue.close();
     await processedEventQueue.close();
     await deadLetterQueue.close();

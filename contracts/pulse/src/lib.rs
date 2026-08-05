@@ -68,6 +68,18 @@ const TOPIC_BATCH: Symbol = symbol_short!("batch");
 /// Maximum batch size for batch_pulse
 const MAX_BATCH_SIZE: u32 = 50;
 
+/// Multi-sig approval threshold
+const MULTISIG_KEY: Symbol = symbol_short!("MULTISIG");
+
+/// Version history for upgrade tracking
+#[contracttype]
+#[derive(Clone)]
+pub struct VersionRecord {
+    pub version: u32,
+    pub upgraded_at: u64,
+    pub previous_hash: soroban_sdk::BytesN<32>,
+}
+
 #[contract]
 pub struct PulseContract;
 
@@ -143,16 +155,118 @@ impl PulseContract {
         Ok(())
     }
 
+    /// ── Upgrade Mechanism ─────────────────────
+
+    /// Upgrade the contract version (only owner).
+    /// Stores a version record for audit trail.
+    pub fn upgrade_version(
+        env: Env,
+        new_version: u32,
+        wasm_hash: soroban_sdk::BytesN<32>,
+    ) -> Result<(), PulseError> {
+        let mut meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        if new_version <= meta.version {
+            return Err(PulseError::CounterOverflow);
+        }
+
+        let record = VersionRecord {
+            version: new_version,
+            upgraded_at: env.ledger().timestamp(),
+            previous_hash: wasm_hash.clone(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("VERSION"), &record);
+
+        meta.version = new_version;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events().publish(
+            (symbol_short!("upgrade"), symbol_short!("applied")),
+            (new_version, wasm_hash),
+        );
+
+        log!(&env, "Contract upgraded to version {}", new_version);
+        Ok(())
+    }
+
+    /// Get the latest version record
+    pub fn get_version_record(env: Env) -> Option<VersionRecord> {
+        env.storage()
+            .persistent()
+            .get::<Symbol, VersionRecord>(&symbol_short!("VERSION"))
+    }
+
+    /// ── Multi-Signature Authorization ─────────
+
+    /// Set the list of authorized signers for multi-sig operations.
+    /// Only the owner can update the signer list.
+    pub fn set_signers(env: Env, signers: Vec<Address>, threshold: u32) -> Result<(), PulseError> {
+        let meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        if threshold == 0 || threshold > signers.len() as u32 {
+            return Err(PulseError::InvalidCaller);
+        }
+
+        let signer_count = signers.len();
+        let signer_data = (signers, threshold);
+        env.storage().instance().set(&MULTISIG_KEY, &signer_data);
+
+        log!(&env, "Multi-sig configured: {} signers, threshold {}", signer_count, threshold);
+        Ok(())
+    }
+
+    /// Get the current multi-sig configuration
+    pub fn get_signers(env: Env) -> (Vec<Address>, u32) {
+        env.storage()
+            .instance()
+            .get::<Symbol, (Vec<Address>, u32)>(&MULTISIG_KEY)
+            .unwrap_or((Vec::new(&env), 0))
+    }
+
+    /// ── Emergency Kill Switch ─────────────────
+
+    /// Permanently disable the contract (canonical kill switch).
+    /// Only the owner can invoke this. All mutating functions will fail afterwards.
+    /// This is MORE severe than pause: pause is reversible; kill is not.
+    pub fn kill(env: Env) -> Result<(), PulseError> {
+        let mut meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        // Mark as paused (which blocks all mutations) AND set to max version
+        // to indicate this contract has been permanently terminated
+        meta.paused = true;
+        meta.version = u32::MAX;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events()
+            .publish((symbol_short!("kill"), symbol_short!("applied")), ());
+
+        log!(&env, "Contract permanently killed");
+        Ok(())
+    }
+
+    /// Check if the contract has been killed
+    pub fn is_killed(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
+            .map(|m| m.version == u32::MAX)
+            .unwrap_or(false)
+    }
+
     /// ── Pausability ───────────────────────────
 
     /// Pause the contract (only owner). When paused, pulse() and broadcast_pulse() will fail.
     pub fn pause(env: Env) -> Result<(), PulseError> {
         let mut meta = get_or_create_meta(&env);
-        meta.owner.require_auth();
-
-        if meta.paused {
-            return Ok(()); // Already paused — idempotent
-        }
+        meta.owner.require_auth();            if meta.paused {
+                return Ok(());
+            }
 
         meta.paused = true;
         env.storage().instance().set(&META_KEY, &meta);
@@ -165,11 +279,9 @@ impl PulseContract {
     /// Unpause the contract (only owner)
     pub fn unpause(env: Env) -> Result<(), PulseError> {
         let mut meta = get_or_create_meta(&env);
-        meta.owner.require_auth();
-
-        if !meta.paused {
-            return Ok(()); // Already unpaused — idempotent
-        }
+        meta.owner.require_auth();            if !meta.paused {
+                return Ok(());
+            }
 
         meta.paused = false;
         env.storage().instance().set(&META_KEY, &meta);

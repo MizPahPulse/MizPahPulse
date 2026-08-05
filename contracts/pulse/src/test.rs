@@ -325,3 +325,69 @@ fn test_uninitialized_contract_has_no_owner() {
     assert!(client.owner().is_none());
     assert!(client.get_meta().is_none());
 }
+
+#[test]
+fn test_upgrade_version() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let hash = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
+
+    client.upgrade_version(&3u32, &hash);
+
+    let meta = client.get_meta().unwrap();
+    assert_eq!(meta.version, 3);
+
+    let record = client.get_version_record();
+    assert!(record.is_some());
+}
+
+#[test]
+fn test_upgrade_rejects_downgrade() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let hash = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
+    client.upgrade_version(&5u32, &hash);
+
+    let result = client.try_upgrade_version(&3u32, &hash);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_kill_switch() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    assert!(!client.is_killed());
+
+    client.kill();
+
+    assert!(client.is_killed());
+    assert!(client.is_paused());
+
+    // Pulse should fail after kill
+    let result = client.try_pulse(&symbol_short!("alice"));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_signers() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    client.set_signers(&signers, &1u32);
+
+    let (stored_signers, threshold) = client.get_signers();
+    assert_eq!(threshold, 1u32);
+    assert_eq!(stored_signers.len(), 1);
+}
