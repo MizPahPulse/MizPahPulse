@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { isValidPublicKey, isValidContractId, isValidTransactionHash } from '@mizpah-pulse/stellar';
+import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,14 +13,18 @@ export const dynamic = 'force-dynamic';
  * Universal search across wallets, contracts, transactions, and assets.
  */
 export async function GET(request: Request) {
+  const rateLimitResult = await rateLimit(request, {
+    maxRequests: 30,
+    windowMs: 60_000,
+    keyPrefix: 'search',
+  });
+  if (rateLimitResult) return rateLimitResult;
+
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
 
   if (!q || q.length < 2) {
-    return NextResponse.json(
-      { success: false, error: { code: 'INVALID_QUERY', message: 'Search query must be at least 2 characters' } },
-      { status: 400 },
-    );
+    return errorResponse(ErrorCode.VALIDATION_ERROR, 'Search query must be at least 2 characters');
   }
 
   try {
@@ -85,20 +91,13 @@ export async function GET(request: Request) {
       }));
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        query: q,
-        results,
-        totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
-      },
-      meta: { timestamp: new Date().toISOString(), version: 'v1' },
+    return successResponse({
+      query: q,
+      results,
+      totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
     });
   } catch (error) {
     console.error('[API] Search error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Search failed' } },
-      { status: 500 },
-    );
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Search failed');
   }
 }
