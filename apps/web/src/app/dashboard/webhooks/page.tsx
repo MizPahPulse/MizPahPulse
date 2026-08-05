@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Card, Badge, cn, StatusDot, EmptyState } from '@mizpah-pulse/ui';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Card, Badge, cn, StatusDot, EmptyState, Skeleton } from '@mizpah-pulse/ui';
 import { Webhook, Plus, Copy, Trash2, X } from 'lucide-react';
 import { isValidUrl } from '@/lib/validators';
+import { apiFetch, ApiClientError } from '@/lib/api-client';
+import { formatTimeAgo } from '@/lib/date-utils';
 
 const EVENT_OPTIONS = [
   'PAYMENT',
@@ -20,46 +22,79 @@ interface WebhookItem {
   events: string[];
   status: 'active' | 'error';
   deliveries: number;
-  lastDelivery: string;
+  lastDelivery: string | null;
+  failedDeliveries: number;
 }
 
-const INITIAL_WEBHOOKS: WebhookItem[] = [
-  {
-    id: '1',
-    endpoint: 'https://myapp.com/webhooks/stellar',
-    events: ['PAYMENT', 'DEX_TRADE'],
-    status: 'active',
-    deliveries: 342,
-    lastDelivery: '2s ago',
-  },
-  {
-    id: '2',
-    endpoint: 'https://api.defiprotocol.com/hooks',
-    events: ['SOROBAN_INVOKE', 'SOROBAN_EVENT'],
-    status: 'active',
-    deliveries: 128,
-    lastDelivery: '1 min ago',
-  },
-  {
-    id: '3',
-    endpoint: 'https://notification.example.com/ingest',
-    events: ['NFT_TRANSFER'],
-    status: 'error',
-    deliveries: 56,
-    lastDelivery: '1 hour ago',
-  },
-];
+interface ApiWebhook {
+  id: string;
+  endpoint: string;
+  events: string[];
+  isActive: boolean;
+  failedDeliveries: number;
+  lastDeliveryAt?: string | null;
+  createdAt: string;
+  deliveries?: Array<{ id: string; createdAt: string }>;
+}
+
+function mapWebhook(w: ApiWebhook): WebhookItem {
+  const lastAt = w.lastDeliveryAt ? new Date(w.lastDeliveryAt).getTime() : null;
+  return {
+    id: w.id,
+    endpoint: w.endpoint,
+    events: Array.isArray(w.events) ? w.events : [],
+    status: w.isActive ? 'active' : 'error',
+    deliveries: w.deliveries?.length ?? 0,
+    lastDelivery: lastAt ? formatTimeAgo(new Date(lastAt)) : '—',
+    failedDeliveries: w.failedDeliveries ?? 0,
+  };
+}
 
 export default function WebhooksPage() {
-  const [webhooks, setWebhooks] = useState<WebhookItem[]>(INITIAL_WEBHOOKS);
+  const [webhooks, setWebhooks] = useState<WebhookItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [endpoint, setEndpoint] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>(['PAYMENT']);
   const [endpointError, setEndpointError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
-    // Validate the endpoint URL before adding
+  const loadWebhooks = useCallback(async () => {
+    setLoading(true);
+    setPageError(null);
+    try {
+      const data = await apiFetch<ApiWebhook[]>('/api/v1/webhooks');
+      setWebhooks(data.map(mapWebhook));
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : 'Failed to load webhooks');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const data = await apiFetch<ApiWebhook[]>('/api/v1/webhooks', {
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) setWebhooks(data.map(mapWebhook));
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setPageError(err instanceof Error ? err.message : 'Failed to load webhooks');
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
+
+  const handleCreate = async () => {
+    // Validate the endpoint URL before submitting
     if (!isValidUrl(endpoint)) {
       setEndpointError('Enter a valid https:// webhook endpoint URL');
       return;
@@ -69,22 +104,32 @@ export default function WebhooksPage() {
       return;
     }
 
-    const newWebhook: WebhookItem = {
-      id: String(Date.now()),
-      endpoint,
-      events: selectedEvents,
-      status: 'active',
-      deliveries: 0,
-      lastDelivery: '—',
-    };
-    setWebhooks((prev) => [newWebhook, ...prev]);
-    setEndpoint('');
+    setCreating(true);
     setEndpointError(null);
-    setIsCreating(false);
+    try {
+      const created = await apiFetch<ApiWebhook>('/api/v1/webhooks', {
+        method: 'POST',
+        body: { endpoint, events: selectedEvents },
+      });
+      setWebhooks((prev) => [mapWebhook(created), ...prev]);
+      setEndpoint('');
+      setIsCreating(false);
+    } catch (err) {
+      setEndpointError(
+        err instanceof ApiClientError ? err.message : 'Failed to create webhook. Try again.',
+      );
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setWebhooks((prev) => prev.filter((w) => w.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await apiFetch(`/api/v1/webhooks/${id}`, { method: 'DELETE' });
+      setWebhooks((prev) => prev.filter((w) => w.id !== id));
+    } catch {
+      setPageError('Failed to delete webhook. Try again.');
+    }
   };
 
   const handleCopy = async (endpointUrl: string) => {
@@ -102,6 +147,10 @@ export default function WebhooksPage() {
       prev.includes(evt) ? prev.filter((e) => e !== evt) : [...prev, evt],
     );
   };
+
+  const activeCount = webhooks.filter((w) => w.status === 'active').length;
+  const totalDelivered = webhooks.reduce((s, w) => s + w.deliveries, 0);
+  const configuredEvents = webhooks.reduce((s, w) => s + w.events.length, 0);
 
   return (
     <div className="space-y-6">
@@ -123,6 +172,30 @@ export default function WebhooksPage() {
           New Webhook
         </button>
       </div>
+
+      {pageError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
+        >
+          <span>{pageError}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void loadWebhooks()}
+              className="font-semibold underline underline-offset-2"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => setPageError(null)}
+              className="rounded p-1 hover:bg-red-100 dark:hover:bg-red-900"
+              aria-label="Dismiss error"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Create webhook form */}
       {isCreating && (
@@ -200,10 +273,11 @@ export default function WebhooksPage() {
             </div>
 
             <button
-              onClick={handleCreate}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700"
+              onClick={() => void handleCreate()}
+              disabled={creating}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Create Webhook
+              {creating ? 'Creating…' : 'Create Webhook'}
             </button>
           </div>
         </Card>
@@ -211,25 +285,36 @@ export default function WebhooksPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: 'Active Webhooks', value: webhooks.filter((w) => w.status === 'active').length },
-          {
-            label: 'Total Delivered',
-            value: webhooks.reduce((s, w) => s + w.deliveries, 0).toLocaleString(),
-          },
-          { label: 'Configured Events', value: webhooks.reduce((s, w) => s + w.events.length, 0) },
+          { label: 'Active Webhooks', value: activeCount },
+          { label: 'Total Delivered', value: totalDelivered.toLocaleString() },
+          { label: 'Configured Events', value: configuredEvents },
         ].map((stat) => (
           <Card key={stat.label} padding="md">
             <div className="text-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
               <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {stat.value}
+                {loading ? <Skeleton className="mx-auto h-8 w-16" /> : stat.value}
               </p>
             </div>
           </Card>
         ))}
       </div>
 
-      {webhooks.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} padding="md">
+              <div className="flex items-center gap-4">
+                <Skeleton variant="circular" className="h-10 w-10" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : webhooks.length === 0 ? (
         <Card>
           <EmptyState
             icon={<Webhook className="h-10 w-10" />}
@@ -261,6 +346,9 @@ export default function WebhooksPage() {
                   </div>
                   <p className="mt-1 text-xs text-slate-400">
                     {wh.deliveries} deliveries · Last: {wh.lastDelivery}
+                    {wh.failedDeliveries > 0 && (
+                      <span className="text-red-500"> · {wh.failedDeliveries} failed</span>
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -272,7 +360,7 @@ export default function WebhooksPage() {
                     <Copy className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(wh.id)}
+                    onClick={() => void handleDelete(wh.id)}
                     className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-red-500 dark:hover:bg-slate-800"
                     aria-label={`Delete webhook ${wh.endpoint}`}
                   >
