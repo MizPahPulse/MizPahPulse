@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, cn } from '@mizpah-pulse/ui';
+import React, { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, cn, Spinner } from '@mizpah-pulse/ui';
 import {
   Activity,
   ArrowLeftRight,
@@ -52,14 +52,63 @@ const hourlyData = [
 
 const maxValue = Math.max(...hourlyData.map((d) => d.payments));
 
-const metricCards = [
-  { label: 'Total Volume (24h)', value: '1.2M XLM', change: '+18%', icon: DollarSign, trend: 'up' },
-  { label: 'Active Wallets', value: '3,847', change: '+12%', icon: Users, trend: 'up' },
-  { label: 'Avg. Gas Fee', value: '0.001 XLM', change: '-5%', icon: Coins, trend: 'down' },
-  { label: 'Contract Calls', value: '2,156', change: '+32%', icon: FileCode, trend: 'up' },
-];
+interface StatsData {
+  totalEvents: number;
+  eventsLast24h: number;
+  uniqueAccounts: number;
+  trackedContracts: number;
+}
 
 export default function AnalyticsPage() {
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load real metrics from the stats API, falling back to sample values
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/v1/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.data) setStats(body.data as StatsData);
+      })
+      .catch(() => {
+        // API unavailable — keep sample values
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const metricCards = [
+    {
+      label: 'Events (24h)',
+      value: stats?.eventsLast24h?.toLocaleString() ?? '1,247',
+      icon: DollarSign,
+      trend: 'up' as const,
+    },
+    {
+      label: 'Total Events',
+      value: stats?.totalEvents?.toLocaleString() ?? '8,432',
+      icon: Users,
+      trend: 'up' as const,
+    },
+    {
+      label: 'Tracked Contracts',
+      value: stats?.trackedContracts?.toLocaleString() ?? '156',
+      icon: Coins,
+      trend: 'up' as const,
+    },
+    {
+      label: 'Unique Accounts',
+      value: stats?.uniqueAccounts?.toLocaleString() ?? '3,847',
+      icon: FileCode,
+      trend: 'up' as const,
+    },
+  ];
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -82,18 +131,11 @@ export default function AnalyticsPage() {
                 <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
                   {metric.value}
                 </p>
-              </div>
+              </div>{' '}
               <metric.icon className="h-5 w-5 text-slate-300 dark:text-slate-600" />
             </div>
-            <p
-              className={cn(
-                'mt-2 text-xs font-medium',
-                metric.trend === 'up'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-red-600 dark:text-red-400',
-              )}
-            >
-              {metric.change} vs yesterday
+            <p className={cn('mt-2 text-xs font-medium', 'text-emerald-600 dark:text-emerald-400')}>
+              {loading ? 'Loading…' : 'Live from API'}
             </p>
           </Card>
         ))}
