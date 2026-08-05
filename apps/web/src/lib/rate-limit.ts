@@ -1,5 +1,16 @@
 import { errorResponse, ErrorCode } from './api-errors';
 import type { NextResponse } from 'next/server';
+import type Redis from 'ioredis';
+
+/**
+ * Rate limiting backed by Redis (when available) with an in-memory fallback.
+ *
+ * Why Redis: the old implementation lived in a module-level Map, so every
+ * serverless instance and every restart reset the counters — making limits
+ * trivially bypassable. When REDIS_URL is configured the counters are shared
+ * and durable across instances. If Redis is down we fail *open* to the
+ * in-memory store rather than rejecting legitimate traffic.
+ */
 
 interface RateLimitEntry {
   count: number;
@@ -35,8 +46,108 @@ export interface RateLimitOptions {
   keyPrefix?: string;
 }
 
+// ──────────────────────────────────────────────
+// Redis backend (lazy, fail-open)
+// ──────────────────────────────────────────────
+let redisClient: Redis | null = null;
+let lastRedisFailure = 0;
+const REDIS_RETRY_COOLDOWN = 30_000; // Wait 30s before retrying a failed connection
+
+async function getRedis(): Promise<Redis | null> {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  if (redisClient) return redisClient;
+  if (Date.now() - lastRedisFailure < REDIS_RETRY_COOLDOWN) return null;
+
+  const { default: RedisModule } = await import('ioredis');
+  try {
+    const client = new RedisModule(url, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      connectTimeout: 2_000,
+    });
+    client.on('error', () => {
+      // Mark Redis unhealthy so subsequent calls fall back to memory.
+      lastRedisFailure = Date.now();
+    });
+    await client.ping();
+    redisClient = client;
+    return client;
+  } catch {
+    lastRedisFailure = Date.now();
+    return null;
+  }
+}
+
+interface LimitCheck {
+  limited: boolean;
+  count: number;
+  resetAt: number;
+}
+
 /**
- * Simple sliding-window rate limiter.
+ * Fixed-window counter keyed by `ratelimit:<identifier>:<bucket>`.
+ * Buckets are aligned to the window so reset times are predictable.
+ */
+async function checkRedisLimit(
+  identifier: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<LimitCheck> {
+  const client = await getRedis();
+  if (!client) {
+    // Redis unavailable — fall back to the in-memory store.
+    return checkMemoryLimit(identifier, maxRequests, windowMs);
+  }
+
+  try {
+    const now = Date.now();
+    const bucket = Math.floor(now / windowMs) * windowMs;
+    const key = `ratelimit:${identifier}:${bucket}`;
+    const count = await client.incr(key);
+    if (count === 1) {
+      await client.expire(key, Math.max(1, Math.ceil(windowMs / 1000)));
+    }
+    return {
+      limited: count > maxRequests,
+      count,
+      resetAt: bucket + windowMs,
+    };
+  } catch {
+    lastRedisFailure = Date.now();
+    return checkMemoryLimit(identifier, maxRequests, windowMs);
+  }
+}
+
+function checkMemoryLimit(identifier: string, maxRequests: number, windowMs: number): LimitCheck {
+  startCleanup();
+
+  const now = Date.now();
+  const existing = store.get(identifier);
+
+  if (!existing || now > existing.resetAt) {
+    store.set(identifier, { count: 1, resetAt: now + windowMs });
+    return { limited: false, count: 1, resetAt: now + windowMs };
+  }
+
+  existing.count++;
+  return {
+    limited: existing.count > maxRequests,
+    count: existing.count,
+    resetAt: existing.resetAt,
+  };
+}
+
+function resolveIdentifier(request: Request, keyPrefix: string): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown';
+  const url = new URL(request.url);
+  return `${keyPrefix}:${ip}:${url.pathname}`;
+}
+
+/**
+ * Sliding-window rate limiter (Redis-backed with in-memory fallback).
  * Returns null if the request is allowed, or a 429 error response if rate limited.
  */
 export async function rateLimit(
@@ -45,26 +156,11 @@ export async function rateLimit(
 ): Promise<NextResponse | null> {
   const { maxRequests = 100, windowMs = 60_000, keyPrefix = 'global' } = options;
 
-  // Use IP + route as identifier
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown';
-  const url = new URL(request.url);
-  const identifier = `${keyPrefix}:${ip}:${url.pathname}`;
+  const identifier = resolveIdentifier(request, keyPrefix);
+  const { limited, resetAt } = await checkRedisLimit(identifier, maxRequests, windowMs);
 
-  startCleanup();
-
-  const now = Date.now();
-  const existing = store.get(identifier);
-
-  if (!existing || now > existing.resetAt) {
-    store.set(identifier, { count: 1, resetAt: now + windowMs });
-    return null;
-  }
-
-  existing.count++;
-
-  if (existing.count > maxRequests) {
-    const retryAfter = Math.ceil((existing.resetAt - now) / 1000);
+  if (limited) {
+    const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
     return errorResponse(
       ErrorCode.RATE_LIMITED,
       `Rate limit exceeded. Try again in ${retryAfter}s.`,
@@ -72,6 +168,13 @@ export async function rateLimit(
         maxRequests,
         windowMs,
         retryAfterSeconds: retryAfter,
+      },
+      undefined,
+      {
+        'X-RateLimit-Limit': String(maxRequests),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)),
+        'Retry-After': String(Math.max(1, retryAfter)),
       },
     );
   }
@@ -82,12 +185,25 @@ export async function rateLimit(
 /**
  * Get remaining rate limit for diagnostics.
  */
-export function getRateLimitInfo(request: Request, options: RateLimitOptions = {}) {
+export async function getRateLimitInfo(request: Request, options: RateLimitOptions = {}) {
   const { maxRequests = 100, windowMs = 60_000, keyPrefix = 'global' } = options;
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown';
-  const url = new URL(request.url);
-  const identifier = `${keyPrefix}:${ip}:${url.pathname}`;
+  const identifier = resolveIdentifier(request, keyPrefix);
+
+  const client = await getRedis();
+  if (client) {
+    try {
+      const now = Date.now();
+      const bucket = Math.floor(now / windowMs) * windowMs;
+      const key = `ratelimit:${identifier}:${bucket}`;
+      const count = await client.get(key);
+      return {
+        remaining: Math.max(0, maxRequests - (count ? parseInt(count, 10) : 0)),
+        resetAt: bucket + windowMs,
+      };
+    } catch {
+      lastRedisFailure = Date.now();
+    }
+  }
 
   const entry = store.get(identifier);
   const now = Date.now();

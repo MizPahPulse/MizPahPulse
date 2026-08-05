@@ -39,13 +39,27 @@ export interface ApiError {
 }
 
 /**
+ * Generate a correlation ID for a request. Passed through logs and responses
+ * so failures can be traced end-to-end.
+ */
+export function createRequestId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
  * Create a standardized error response.
+ *
+ * @param headers - Extra response headers (e.g. rate-limit metadata, request IDs).
  */
 export function errorResponse(
   code: ErrorCodeType,
   message: string,
   details?: Record<string, unknown>,
   requestId?: string,
+  headers?: Record<string, string>,
 ): NextResponse {
   const status = HTTP_STATUS_MAP[code] ?? 500;
   return NextResponse.json(
@@ -60,19 +74,23 @@ export function errorResponse(
       meta: {
         timestamp: new Date().toISOString(),
         version: 'v1',
+        ...(requestId ? { requestId } : {}),
       },
     },
-    { status },
+    { status, headers },
   );
 }
 
 /**
  * Create a standardized success response.
+ *
+ * @param headers - Extra response headers (e.g. cache or correlation headers).
  */
 export function successResponse<T>(
   data: T,
   status = 200,
   meta?: Record<string, unknown>,
+  headers?: Record<string, string>,
 ): NextResponse {
   return NextResponse.json(
     {
@@ -84,6 +102,6 @@ export function successResponse<T>(
         ...meta,
       },
     },
-    { status },
+    { status, headers },
   );
 }
