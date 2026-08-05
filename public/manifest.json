@@ -1,0 +1,21 @@
+{
+  "name": "MizPahPulse - Stellar Blockchain Intelligence",
+  "short_name": "MizPahPulse",
+  "description": "Real-time blockchain intelligence platform for the Stellar ecosystem",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

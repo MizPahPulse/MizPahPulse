@@ -1,0 +1,26 @@
+# MizPahPulse Code Owners
+# Auto-assigns PR reviewers based on changed files
+
+# Core contracts
+contracts/** @MizPahPulse/contracts
+
+# API routes & backend
+apps/web/src/app/api/** @MizPahPulse/backend
+apps/ingester/** @MizPahPulse/backend
+apps/ws/** @MizPahPulse/backend
+
+# Frontend
+apps/web/src/app/** @MizPahPulse/frontend
+apps/web/src/components/** @MizPahPulse/frontend
+packages/ui/** @MizPahPulse/frontend
+
+# Database
+packages/database/** @MizPahPulse/backend
+
+# CI/CD
+.github/** @MizPahPulse/devops
+
+# Root configs
+*.json @MizPahPulse/devops
+*.toml @MizPahPulse/devops
+docker-compose.yml @MizPahPulse/devops

@@ -1,92 +1,99 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 
-const MOCK_EVENT_DATA = [
-  { type: 'PAYMENT', title: 'Payment: 100 XLM', from: 'GABC...XYZ', to: 'GDEF...UVW', amount: '100 XLM' },
-  { type: 'SOROBAN_INVOKE', title: 'swap() called on CA7G...KLM', from: 'GXLM...PQR', amount: '0.5 XLM fee' },
-  { type: 'DEX_TRADE', title: 'DEX Trade: USDC/XLM', from: 'GDEF...UVW', amount: '500 USDC → 4,750 XLM' },
-  { type: 'NFT_TRANSFER', title: 'NFT #5678 transferred', from: 'GKLM...NOP', to: 'GABC...XYZ', amount: 'NFT #5678' },
-  { type: 'TOKEN_TRANSFER', title: 'Token Transfer: 1,000 USDC', from: 'GABC...XYZ', to: 'GDEF...UVW', amount: '1,000 USDC' },
-];
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/v1/events/live
  *
- * Server-Sent Events stream of real-time blockchain events.
- * Connects to the WebSocket server for event data.
+ * Server-Sent Events (SSE) endpoint for streaming live blockchain events.
+ * Clients connect and receive new events as they are processed.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const categories = searchParams.getAll('category');
+  const eventTypes = searchParams.getAll('eventType');
+
   const encoder = new TextEncoder();
+  let lastEventId: string | null = null;
+  let closed = false;
+
   const stream = new ReadableStream({
-    start(controller) {
-      const sendEvent = (data: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
+    async start(controller) {
+      // Send initial connection event
+      controller.enqueue(
+        encoder.encode(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`),
+      );
 
-      // Initial connection event
-      sendEvent({
-        type: 'connected',
-        timestamp: new Date().toISOString(),
-        message: 'SSE stream established',
-      });
+      // Poll for new events every 2 seconds
+      const pollInterval = setInterval(async () => {
+        if (closed) {
+          clearInterval(pollInterval);
+          return;
+        }
 
-      // Fetch recent events from the database and stream them
-      let seq = 0;
-      const streamEvents = async () => {
         try {
-          const recent = await prisma.event.findMany({
-            orderBy: { timestamp: 'desc' },
-            take: 10,
-          });
-          for (const evt of recent) {
-            sendEvent({
-              type: 'event',
-              id: evt.id,
-              eventType: evt.eventType,
-              category: evt.category,
-              transactionHash: evt.transactionHash,
-              accountId: evt.accountId,
-              amount: evt.amount,
-              timestamp: evt.timestamp,
-              sequence: seq++,
-              data: typeof evt.payload === 'string' ? JSON.parse(evt.payload) : evt.payload,
+          const where: Record<string, unknown> = {};
+
+          if (categories.length > 0) {
+            where.category = { in: categories };
+          }
+          if (eventTypes.length > 0) {
+            where.eventType = { in: eventTypes };
+          }
+
+          // Only get events newer than last sent
+          if (lastEventId) {
+            // Find the timestamp of the last sent event
+            const lastEvent = await prisma.event.findUnique({
+              where: { id: lastEventId },
+              select: { timestamp: true },
             });
+            if (lastEvent) {
+              where.timestamp = { gt: lastEvent.timestamp };
+            }
+          }
+
+          const events = await prisma.event.findMany({
+            where,
+            orderBy: { timestamp: 'asc' },
+            take: 20,
+          });
+
+          for (const event of events) {
+            lastEventId = event.id;
+
+            const data = JSON.stringify({
+              id: event.id,
+              eventType: event.eventType,
+              category: event.category,
+              timestamp: event.timestamp,
+              accountId: event.accountId,
+              contractId: event.contractId,
+              assetCode: event.assetCode,
+              amount: event.amount,
+            });
+
+            controller.enqueue(
+              encoder.encode(
+                `id: ${event.id}\nevent: event\ndata: ${data}\nretry: 2000\n\n`,
+              ),
+            );
           }
         } catch (err) {
-          // If DB is unavailable, stream mock data
-          for (const mock of MOCK_EVENT_DATA) {
-            sendEvent({
-              ...mock,
-              type: 'event',
-              timestamp: new Date().toISOString(),
-              sequence: seq++,
-            });
-          }
+          console.error('[SSE] Poll error:', err);
         }
-      };
+      }, 2000);
 
-      streamEvents();
-
-      // Re-stream every 5 seconds
-      const eventTimer = setInterval(streamEvents, 5000);
-
-      // Heartbeat to keep the connection alive
-      const heartbeat = setInterval(() => {
-        sendEvent({ type: 'heartbeat', timestamp: new Date().toISOString() });
-      }, 30000);
-
-      // Cleanup on connection close
-      const cleanup = () => {
-        clearInterval(heartbeat);
-        clearInterval(eventTimer);
-        controller.close();
-      };
-
-      // If the request is aborted, clean up
-      return cleanup;
+      // Cleanup on close
+      request.signal.addEventListener('abort', () => {
+        closed = true;
+        clearInterval(pollInterval);
+      });
+    },
+    cancel() {
+      closed = true;
     },
   });
 
@@ -95,7 +102,7 @@ export async function GET() {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no',
     },
   });
 }

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard/settings
+Sitemap: https://mizpah-pulse.vercel.app/sitemap.xml
