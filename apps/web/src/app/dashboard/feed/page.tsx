@@ -4,6 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { Badge, FilterBar, SearchInput, StatusDot, Card, EmptyState, cn } from '@mizpah-pulse/ui';
 import type { EventCategory, LiveEvent } from '@mizpah-pulse/types';
+import { formatTimeAgo } from '@/lib/date-utils';
+import { truncateAddress } from '@/lib/display-utils';
+import { formatCompactNumber } from '@/lib/format-number';
+import { MAX_EVENT_BUFFER } from '@/lib/constants';
 import {
   Activity,
   ArrowUpDown,
@@ -13,8 +17,7 @@ import {
   Radio,
 } from 'lucide-react';
 
-/** Maximum number of events to keep in the buffer */
-const MAX_EVENT_BUFFER = 100;
+/** Maximum number of events to keep in the buffer (from shared constants) */
 
 interface FeedEvent {
   id: string;
@@ -61,18 +64,6 @@ const categoryOptions = [
   { label: 'Governance', value: 'GOVERNANCE' },
 ];
 
-/**
- * Format a relative time string from a timestamp
- */
-function formatRelativeTime(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
 
 /**
  * Build a human-readable title from a WebSocket event
@@ -142,7 +133,7 @@ export default function FeedPage() {
       type: rawEvent.eventType,
       category: category,
       title,
-      from: accountId ? `${accountId.slice(0, 4)}...${accountId.slice(-4)}` : '—',
+      from: accountId ? truncateAddress(accountId) : '—',
       to: (rawEvent.data as Record<string, unknown> | undefined)?.to as string | undefined,
       amount: (rawEvent.data as Record<string, unknown> | undefined)?.amount as string | undefined,
       time: 'just now',
@@ -162,7 +153,7 @@ export default function FeedPage() {
       setEvents((prev) =>
         prev.map((e) => ({
           ...e,
-          time: formatRelativeTime(e.timestamp),
+          time: formatTimeAgo(new Date(e.timestamp)),
         })),
       );
     }, 10_000);
@@ -233,7 +224,7 @@ export default function FeedPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: 'WS Status', value: wsConnected ? 'Connected' : 'Offline', icon: Radio },
-          { label: 'Events Buffer', value: String(events.length), icon: Activity },
+          { label: 'Events Buffer', value: formatCompactNumber(events.length), icon: Activity },
           { label: 'Filtered', value: String(sortedEvents.length), icon: Filter },
           { label: 'Sort', value: sortOrder === 'desc' ? 'Newest' : 'Oldest', icon: ArrowUpDown },
         ].map((stat) => (
