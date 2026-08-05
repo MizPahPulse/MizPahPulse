@@ -1,0 +1,2 @@
+export async function tryCatch<T>(fn: () => Promise<T>): Promise<{ data: T | null; error: Error | null }> { try { return { data: await fn(), error: null }; } catch (e) { return { data: null, error: e instanceof Error ? e : new Error(String(e)) }; } }
+export function tryCatchSync<T>(fn: () => T): { data: T | null; error: Error | null } { try { return { data: fn(), error: null }; } catch (e) { return { data: null, error: e instanceof Error ? e : new Error(String(e)) }; } }
