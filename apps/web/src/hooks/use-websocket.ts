@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { getClientEnv } from '@/lib/env-client';
 
 interface UseWebSocketOptions {
   eventTypes?: string[];
@@ -36,7 +37,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   useEffect(() => {
     if (!enabled) return;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+    const wsUrl = getClientEnv().wsUrl;
     const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
