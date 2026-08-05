@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { isValidPublicKey, isValidContractId, isValidTransactionHash } from '@mizpah-pulse/stellar';
-import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
@@ -28,6 +28,8 @@ export async function GET(request: Request) {
   if (!q || q.length < 2) {
     return errorResponse(ErrorCode.VALIDATION_ERROR, 'Search query must be at least 2 characters');
   }
+
+  const requestId = createRequestId();
 
   try {
     const results: Record<string, unknown[]> = {};
@@ -101,14 +103,19 @@ export async function GET(request: Request) {
       );
     }
 
-    return successResponse({
-      query: q,
-      results,
-      totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
-    });
+    return successResponse(
+      {
+        query: q,
+        results,
+        totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
+      },
+      undefined,
+      undefined,
+      { 'X-Request-ID': requestId },
+    );
   } catch (error) {
     logger.error('[API] Search error:', error);
     recordRequest(0, true);
-    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Search failed');
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Search failed', undefined, requestId);
   }
 }

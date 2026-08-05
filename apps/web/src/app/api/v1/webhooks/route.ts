@@ -3,7 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { EventType } from '@mizpah-pulse/types';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
 
@@ -47,6 +47,15 @@ function sanitizeWebhook(w: {
  * List all registered webhooks.
  */
 async function GET(request: Request) {
+  // Listing was previously unthrottled while the create endpoint was limited.
+  const rateLimitResult = await rateLimit(request, {
+    maxRequests: 30,
+    windowMs: 60_000,
+    keyPrefix: 'webhooks:list',
+  });
+  if (rateLimitResult) return rateLimitResult;
+
+  const requestId = createRequestId();
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId') || 'default';
 
@@ -59,6 +68,9 @@ async function GET(request: Request) {
     webhooks.map((w: { events: unknown; secret?: string | null; [key: string]: unknown }) =>
       sanitizeWebhook({ ...w, events: JSON.parse(w.events as string) }),
     ),
+    undefined,
+    undefined,
+    { 'X-Request-ID': requestId },
   );
 }
 
