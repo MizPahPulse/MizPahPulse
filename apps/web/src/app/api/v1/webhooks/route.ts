@@ -17,6 +17,30 @@ const CreateWebhookSchema = z.object({
 });
 
 /**
+ * Mask a signing secret so it can never be fully exposed through the API.
+ * Secrets are only shown once at creation time in real webhook platforms;
+ * here we return a stable placeholder so clients can detect that a secret exists.
+ */
+function maskSecret(secret: string): string {
+  const prefix = secret.startsWith('whsec_') ? 'whsec_' : '';
+  return `${prefix}${'\u2022'.repeat(12)}`;
+}
+
+/**
+ * Strip the raw secret from a webhook record and attach a masked placeholder.
+ */
+function sanitizeWebhook(w: {
+  secret?: string | null;
+  [key: string]: unknown;
+}): Record<string, unknown> {
+  const { secret, ...rest } = w;
+  return {
+    ...rest,
+    secretMasked: secret ? maskSecret(secret) : null,
+  };
+}
+
+/**
  * GET /api/v1/webhooks
  *
  * List all registered webhooks.
@@ -31,10 +55,9 @@ async function GET(request: Request) {
   });
 
   return successResponse(
-    webhooks.map((w: { events: unknown; [key: string]: unknown }) => ({
-      ...w,
-      events: JSON.parse(w.events as string),
-    })),
+    webhooks.map((w: { events: unknown; secret?: string | null; [key: string]: unknown }) =>
+      sanitizeWebhook({ ...w, events: JSON.parse(w.events as string) }),
+    ),
   );
 }
 
@@ -73,10 +96,10 @@ async function POST(request: Request) {
     });
 
     return successResponse(
-      {
+      sanitizeWebhook({
         ...webhook,
         events: JSON.parse(webhook.events as string),
-      },
+      }),
       201,
     );
   } catch (error) {
