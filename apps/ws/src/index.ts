@@ -118,6 +118,11 @@ io.on('connection', (socket) => {
     return;
   }
 
+  // Track the connection in the limiter so the cap is actually enforced.
+  // (Previously canConnect() was checked but addConnection() was never called,
+  // so the limiter's counter stayed at 0 and the cap never applied.)
+  connectionLimiter.addConnection();
+
   connectionStats.totalConnections++;
   connectionStats.activeConnections = io.engine.clientsCount;
   if (connectionStats.activeConnections > connectionStats.peakConnections) {
@@ -186,6 +191,7 @@ io.on('connection', (socket) => {
 
   // Disconnect
   socket.on('disconnect', (reason) => {
+    connectionLimiter.removeConnection();
     connectionStats.activeConnections = io.engine.clientsCount;
     console.log(
       `[WS] Client disconnected: ${socket.id} (${reason}, active: ${connectionStats.activeConnections})`,
