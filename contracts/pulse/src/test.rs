@@ -391,3 +391,40 @@ fn test_set_signers() {
     assert_eq!(threshold, 1u32);
     assert_eq!(stored_signers.len(), 1);
 }
+
+#[test]
+fn test_rate_limited_pulse_with_cooldown() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // First pulse should succeed
+    let result = client.rate_limited_pulse(&symbol_short!("alice"), &60u64);
+    assert_eq!(result, 1u32);
+
+    // Second pulse within cooldown should fail
+    let result = client.try_rate_limited_pulse(&symbol_short!("alice"), &60u64);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_estimate_pulse_cost() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let cost = client.estimate_pulse_cost();
+    assert!(cost > 0);
+}
+
+#[test]
+fn test_ledger_timestamp() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let ts = client.get_ledger_timestamp();
+    // In test environment, timestamp may be 0 initially
+    // Just verify the function returns without error
+    let _ = ts;
+}

@@ -184,12 +184,25 @@ export function Sidebar() {
 
 export function Navbar() {
   const [dark, setDark] = useState(getInitialDarkMode);
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline'>('online');
 
   // Apply dark mode on mount and persist changes
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem(DARK_MODE_KEY, String(dark));
   }, [dark]);
+
+  // Listen for online/offline events
+  useEffect(() => {
+    const handleOnline = () => setConnectionStatus('online');
+    const handleOffline = () => setConnectionStatus('offline');
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const toggleDark = () => setDark((d) => !d);
 
@@ -200,6 +213,15 @@ export function Navbar() {
           <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400">
             Stellar Blockchain Intelligence
           </h2>
+        </div>
+        {/* Connection status indicator */}
+        <div className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-xs dark:border-slate-700">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              connectionStatus === 'online' ? 'bg-emerald-500' : 'bg-red-500'
+            }`}
+          />
+          <span className="text-slate-400">{connectionStatus === 'online' ? 'Online' : 'Offline'}</span>
         </div>
       </div>
       <div className="flex items-center gap-3">

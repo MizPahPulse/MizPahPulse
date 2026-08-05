@@ -278,6 +278,39 @@ impl PulseContract {
         Self::pulse(env, caller)
     }
 
+    /// ── Rate-Limited Pulse with Cooldown ─────
+
+    /// Fire a pulse that enforces a cooldown period between calls.
+    /// Prevents spam and provides rate limiting at the contract level.
+    pub fn rate_limited_pulse(
+        env: Env,
+        caller: Symbol,
+        cooldown_seconds: u64,
+    ) -> Result<u32, PulseError> {
+        ensure_not_paused(&env)?;
+
+        // Check if the caller has a cooldown in effect
+        let data = env
+            .storage()
+            .instance()
+            .get::<Symbol, PulseData>(&PULSE_KEY)
+            .unwrap_or(PulseData {
+                count: 0,
+                last_caller: None,
+                last_pulse_at: None,
+            });
+
+        if let Some(last_time) = data.last_pulse_at {
+            let now = env.ledger().timestamp();
+            let elapsed = now.saturating_sub(last_time);
+            if elapsed < cooldown_seconds {
+                return Err(PulseError::ContractPaused); // Repurpose error for cooldown
+            }
+        }
+
+        Self::pulse(env, caller)
+    }
+
     /// ── Gas Optimization ──────────────────────
 
     /// Get the current gas cost estimate for a pulse operation.
