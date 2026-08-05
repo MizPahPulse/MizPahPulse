@@ -1,1 +1,0 @@
-export function debouncePromise<T>(fn: (...args: unknown[]) => Promise<T>, delay: number): (...args: unknown[]) => Promise<T> { let timer: ReturnType<typeof setTimeout>; return (...args) => new Promise((resolve, reject) => { clearTimeout(timer); timer = setTimeout(() => fn(...args).then(resolve).catch(reject), delay); }); }

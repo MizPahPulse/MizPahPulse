@@ -1,1 +1,0 @@
-export function sortByDateField<T extends Record<string, unknown>>(items: T[], field: string, order: 'asc' | 'desc' = 'desc'): T[] { return [...items].sort((a, b) => { const da = new Date(a[field] as string).getTime(); const db = new Date(b[field] as string).getTime(); return order === 'asc' ? da - db : db - da; }); }

@@ -1,1 +1,0 @@
-export function throttle<T extends (...args: unknown[]) => void>(fn: T, limit: number): T { let inThrottle = false; return ((...args: unknown[]) => { if (!inThrottle) { fn(...args); inThrottle = true; setTimeout(() => { inThrottle = false; }, limit); } }) as unknown as T; }
