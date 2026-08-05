@@ -3,6 +3,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WalletProvider } from '@/context/WalletContext';
+import { ToastProvider } from '@mizpah-pulse/ui';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -31,9 +32,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider>
-        {children}
-      </WalletProvider>
+      <ToastProvider>
+        <WalletProvider>
+          {children}
+        </WalletProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

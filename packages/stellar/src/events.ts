@@ -9,6 +9,7 @@ export function categorizeEventType(type: string): EventCategory {
     'path_payment_strict_send',
     'path_payment_strict_receive',
     'create_account',
+    'claim_claimable_balance',
   ];
   const dexTypes = [
     'manage_buy_offer',
@@ -28,6 +29,8 @@ export function categorizeEventType(type: string): EventCategory {
     'invoke_host_function',
     'extend_footprint_ttl',
     'restore_footprint',
+    'contract_event',
+    'soroban_event',
   ];
   const accountTypes = [
     'set_options',
@@ -37,6 +40,7 @@ export function categorizeEventType(type: string): EventCategory {
     'end_sponsoring_future_reserves',
     'revoke_sponsorship',
   ];
+  const nftTypes = ['nft_mint', 'nft_transfer', 'nft_burn'];
 
   const lower = type.toLowerCase();
 
@@ -45,7 +49,7 @@ export function categorizeEventType(type: string): EventCategory {
   if (tokenTypes.includes(lower)) return 'TOKEN';
   if (contractTypes.includes(lower)) return 'CONTRACT';
   if (accountTypes.includes(lower)) return 'ACCOUNT';
-  if (lower.includes('nft')) return 'NFT';
+  if (nftTypes.includes(lower) || lower.includes('nft')) return 'NFT';
   if (lower.includes('governance')) return 'GOVERNANCE';
   if (lower.includes('liquidity')) return 'LIQUIDITY';
   if (lower.includes('sys')) return 'SYSTEM';
