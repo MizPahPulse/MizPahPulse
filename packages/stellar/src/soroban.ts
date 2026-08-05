@@ -62,7 +62,11 @@ export async function pollSorobanEvents(
   const maxRetries = options?.maxRetries ?? 3;
   let currentLedger = startLedger;
   let retries = 0;
-  let timer: ReturnType<typeof setInterval>;
+  // Ref object: the interval is created AFTER the initial poll, but the poll's
+  // error path may clear it — an undefined clearInterval was a latent bug.
+  const timerRef: { current: ReturnType<typeof setInterval> | undefined } = {
+    current: undefined,
+  };
 
   const poll = async () => {
     try {
@@ -92,7 +96,7 @@ export async function pollSorobanEvents(
     } catch (error) {
       retries++;
       if (retries >= maxRetries) {
-        clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         throw error;
       }
     }
@@ -101,9 +105,11 @@ export async function pollSorobanEvents(
   // Initial poll
   await poll();
 
-  timer = setInterval(poll, intervalMs);
+  timerRef.current = setInterval(poll, intervalMs);
 
-  return () => clearInterval(timer);
+  return () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
 }
 
 /**
