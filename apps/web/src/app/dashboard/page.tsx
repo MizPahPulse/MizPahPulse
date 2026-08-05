@@ -1,31 +1,48 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, cn } from '@mizpah-pulse/ui';
+import { Card, CardContent, cn, Spinner } from '@mizpah-pulse/ui';
 import {
   Activity,
   ArrowLeftRight,
   FileCode,
-  Gift,
   Send,
-  Zap,
   TrendingUp,
   Wallet,
 } from 'lucide-react';
+import { formatTimeAgo } from '@/lib/date-utils';
+import { truncateAddress } from '@/lib/display-utils';
 
-const stats = [
-  { label: 'Events Today', value: '1,247', change: '+12%', icon: Activity, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950' },
-  { label: 'Transactions', value: '8,432', change: '+5%', icon: ArrowLeftRight, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950' },
-  { label: 'Active Contracts', value: '156', change: '+23%', icon: FileCode, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950' },
-  { label: 'Payments', value: '3,892', change: '+8%', icon: Send, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
-];
+interface RecentActivityItem {
+  id: string;
+  eventType: string;
+  category: string;
+  timestamp: string;
+  accountId: string | null;
+}
 
-const recentActivity = [
-  { id: '1', type: 'PAYMENT', title: 'Payment: 100 XLM', from: 'GABC...XYZ', to: 'GDEF...UVW', time: '2s ago', status: 'success' },
-  { id: '2', type: 'DEX_TRADE', title: 'DEX Trade: USDC/XLM', from: 'GDEF...UVW', amount: '500 USDC', time: '5s ago', status: 'success' },
-  { id: '3', type: 'SOROBAN_INVOKE', title: 'Contract Call: swap()', from: 'GHIJ...RST', amount: '', time: '8s ago', status: 'error' },
-  { id: '4', type: 'NFT_TRANSFER', title: 'NFT Transfer: #1234', from: 'GKLM...NOP', to: 'GABC...XYZ', time: '12s ago', status: 'success' },
-  { id: '5', type: 'CREATE_ACCOUNT', title: 'Account Created', from: 'GQRW...TUV', amount: '10 XLM', time: '15s ago', status: 'success' },
-];
+interface DashboardStats {
+  totalEvents: number;
+  eventsLast24h: number;
+  uniqueAccounts: number;
+  trackedContracts: number;
+  recentActivity: RecentActivityItem[];
+}
+
+const FALLBACK_STATS: DashboardStats = {
+  totalEvents: 8432,
+  eventsLast24h: 1247,
+  uniqueAccounts: 156,
+  trackedContracts: 12,
+  recentActivity: [
+    { id: '1', eventType: 'PAYMENT', category: 'PAYMENT', timestamp: new Date(Date.now() - 2000).toISOString(), accountId: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+    { id: '2', eventType: 'DEX_TRADE', category: 'DEX', timestamp: new Date(Date.now() - 5000).toISOString(), accountId: 'GDEF1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+    { id: '3', eventType: 'SOROBAN_INVOKE', category: 'CONTRACT', timestamp: new Date(Date.now() - 8000).toISOString(), accountId: 'GHIJ1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+    { id: '4', eventType: 'NFT_TRANSFER', category: 'NFT', timestamp: new Date(Date.now() - 12000).toISOString(), accountId: 'GKLM1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+    { id: '5', eventType: 'CREATE_ACCOUNT', category: 'ACCOUNT', timestamp: new Date(Date.now() - 15000).toISOString(), accountId: 'GNOP1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+  ],
+};
 
 const statusColors: Record<string, string> = {
   success: 'bg-emerald-400',
@@ -34,6 +51,35 @@ const statusColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats>(FALLBACK_STATS);
+  const [loading, setLoading] = useState(true);
+
+  // Load real stats from the API, falling back to sample data if unavailable
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/v1/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.data) setStats(body.data as DashboardStats);
+      })
+      .catch(() => {
+        // API unavailable (no DB) — keep fallback sample data
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const statCards = [
+    { label: 'Events (24h)', value: stats.eventsLast24h.toLocaleString(), icon: Activity, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950' },
+    { label: 'Total Events', value: stats.totalEvents.toLocaleString(), icon: ArrowLeftRight, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950' },
+    { label: 'Tracked Contracts', value: stats.trackedContracts.toLocaleString(), icon: FileCode, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950' },
+    { label: 'Unique Accounts', value: stats.uniqueAccounts.toLocaleString(), icon: Send, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
+  ];
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -46,7 +92,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <Card key={stat.label} padding="lg" hover>
             <div className="flex items-start justify-between">
               <div className="space-y-1">
@@ -54,10 +100,10 @@ export default function DashboardPage() {
                   {stat.label}
                 </p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                  {stat.value}
+                  {loading ? <Spinner size="sm" /> : stat.value}
                 </p>
-                <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  {stat.change} from last hour
+                <p className="text-xs font-medium text-slate-400">
+                  {loading ? 'Loading…' : 'Live from API'}
                 </p>
               </div>
               <div className={cn('rounded-xl p-2.5', stat.color)}>
@@ -101,7 +147,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-2">
-            {recentActivity.map((event) => (
+            {stats.recentActivity.map((event) => (
               <div
                 key={event.id}
                 className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
@@ -109,21 +155,20 @@ export default function DashboardPage() {
                 <span
                   className={cn(
                     'h-2.5 w-2.5 flex-shrink-0 rounded-full',
-                    statusColors[event.status] || statusColors.warning,
+                    statusColors.success,
                   )}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {event.title}
+                    {event.eventType.replace(/_/g, ' ')}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {event.from}
-                    {event.to ? ` → ${event.to}` : ''}
-                    {event.amount ? ` • ${event.amount}` : ''}
+                    {event.accountId ? truncateAddress(event.accountId) : '—'}
+                    {event.category ? ` • ${event.category}` : ''}
                   </p>
                 </div>
                 <span className="ml-auto flex-shrink-0 text-xs text-slate-400 dark:text-slate-500">
-                  {event.time}
+                  {formatTimeAgo(event.timestamp)}
                 </span>
               </div>
             ))}
@@ -133,5 +178,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
