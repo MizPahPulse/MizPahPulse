@@ -6,8 +6,9 @@
 import { prisma } from '@mizpah-pulse/database';
 import { signWebhookPayload } from '@mizpah-pulse/stellar';
 
-const MAX_RETRIES = 3;
-const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential-ish backoff in ms
+const MAX_CONCURRENT_DELIVERIES = 10;
+const DEFAULT_RETRY_DELAY_MS = 5000;
+const JITTER_MS = 500;
 
 interface PendingDelivery {
   id: string;
@@ -18,28 +19,51 @@ interface PendingDelivery {
   endpoint: string;
   secret: string;
   maxRetries: number;
+  retryDelayMs: number;
 }
 
 /**
  * Fetch pending webhook deliveries that need to be processed.
+ *
+ * Each subscription carries its own `maxRetries` and `retryDelayMs`, so the
+ * worker must honor those instead of a hardcoded retry budget. A delivery is
+ * only picked up once its backoff window has elapsed (based on the last
+ * update time plus the subscription's configured delay).
  */
 async function getPendingDeliveries(): Promise<PendingDelivery[]> {
   const deliveries = await prisma.webhookDelivery.findMany({
     where: {
       status: { in: ['PENDING', 'RETRYING'] },
-      attempt: { lt: MAX_RETRIES },
     },
     include: {
       subscription: {
-        select: { endpoint: true, secret: true, maxRetries: true, isActive: true },
+        select: {
+          endpoint: true,
+          secret: true,
+          maxRetries: true,
+          retryDelayMs: true,
+          isActive: true,
+        },
       },
     },
-    take: 50,
+    take: 100,
     orderBy: { createdAt: 'asc' },
   });
 
+  const now = Date.now();
+
   return deliveries
     .filter((d) => d.subscription.isActive)
+    .filter((d) => {
+      // Respect the subscription's own retry budget (not a hardcoded constant).
+      const budget = d.subscription.maxRetries;
+      if (d.attempt >= budget) return false;
+      // Backoff: wait at least the configured delay (plus jitter) after the
+      // last attempt before retrying.
+      const delay = d.subscription.retryDelayMs || DEFAULT_RETRY_DELAY_MS;
+      const nextAllowed = new Date(d.updatedAt).getTime() + delay + JITTER_MS;
+      return nextAllowed <= now;
+    })
     .map((d) => ({
       id: d.id,
       subscriptionId: d.subscriptionId,
@@ -49,6 +73,7 @@ async function getPendingDeliveries(): Promise<PendingDelivery[]> {
       endpoint: d.subscription.endpoint,
       secret: d.subscription.secret,
       maxRetries: d.subscription.maxRetries,
+      retryDelayMs: d.subscription.retryDelayMs || DEFAULT_RETRY_DELAY_MS,
     }));
 }
 
@@ -91,6 +116,22 @@ async function deliverWebhook(
   }
 }
 
+/** Run an async task with a bounded number of concurrent workers. */
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index++];
+      if (item !== undefined) await task(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
 /**
  * Process all pending webhook deliveries.
  */
@@ -103,7 +144,7 @@ export async function processWebhookDeliveries(): Promise<{
   let succeeded = 0;
   let failed = 0;
 
-  for (const delivery of deliveries) {
+  await runWithConcurrency(deliveries, MAX_CONCURRENT_DELIVERIES, async (delivery) => {
     const result = await deliverWebhook(delivery);
 
     if (result.success) {
@@ -140,7 +181,7 @@ export async function processWebhookDeliveries(): Promise<{
 
       failed++;
     }
-  }
+  });
 
   return { processed: deliveries.length, succeeded, failed };
 }

@@ -175,6 +175,7 @@ model WebhookDelivery {
   response       String?
   error          String?
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   completedAt    DateTime?
 
   subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
