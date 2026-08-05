@@ -81,7 +81,9 @@ const MULTISIG_KEY: Symbol = symbol_short!("MULTISIG");
 pub struct VersionRecord {
     pub version: u32,
     pub upgraded_at: u64,
-    pub previous_hash: soroban_sdk::BytesN<32>,
+    /// Hash of the WASM the contract was upgraded TO (was previously
+    /// misleadingly named `previous_hash`).
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
 }
 
 #[contract]
@@ -172,7 +174,6 @@ impl PulseContract {
     ) -> Result<(), PulseError> {
         let mut meta = get_or_create_meta(&env);
         meta.owner.require_auth();
-
         if new_version <= meta.version {
             return Err(PulseError::CounterOverflow);
         }
@@ -180,7 +181,7 @@ impl PulseContract {
         let record = VersionRecord {
             version: new_version,
             upgraded_at: env.ledger().timestamp(),
-            previous_hash: wasm_hash.clone(),
+            new_wasm_hash: wasm_hash.clone(),
         };
 
         env.storage()
@@ -204,6 +205,26 @@ impl PulseContract {
         env.storage()
             .persistent()
             .get::<Symbol, VersionRecord>(&symbol_short!("VERSION"))
+    }
+
+    /// Swap the deployed WASM executable (only owner).
+    ///
+    /// This is the actual on-chain upgrade: it replaces the contract's
+    /// executable with the uploaded WASM identified by `wasm_hash`. Callers
+    /// must upload the new WASM (e.g. via a deployer/steward contract) and
+    /// pass its hash here. An unregistered hash aborts the transaction.
+    pub fn update_wasm(env: Env, wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), PulseError> {
+        let meta = get_or_create_meta(&env);
+        meta.owner.require_auth();
+
+        env.deployer()
+            .update_current_contract_wasm(wasm_hash.clone());
+
+        env.events()
+            .publish((symbol_short!("upgrade"), symbol_short!("wasm")), wasm_hash);
+
+        log!(&env, "Contract WASM upgraded");
+        Ok(())
     }
 
     /// ── Multi-Signature Authorization ─────────

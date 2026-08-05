@@ -1,0 +1,8 @@
+# Build configuration for the Soroban contract WASM.
+#
+# The Soroban VM (soroban-env-host) rejects WASM modules that use the
+# `reference-types` feature, which rustc 1.78+ enables by default for the
+# wasm32-unknown-unknown target. Disabling it keeps the artifact deployable
+# AND lets the test harness execute the real compiled contract.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=-reference-types"]

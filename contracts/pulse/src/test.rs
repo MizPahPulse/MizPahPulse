@@ -327,6 +327,11 @@ fn test_uninitialized_contract_has_no_owner() {
     assert!(client.get_meta().is_none());
 }
 
+fn upload_test_wasm(env: &Env) -> soroban_sdk::BytesN<32> {
+    // Arbitrary hash — upgrade_version records it without executing a swap.
+    soroban_sdk::BytesN::from_array(env, &[7u8; 32])
+}
+
 #[test]
 fn test_upgrade_version() {
     let env = Env::default();
@@ -334,7 +339,7 @@ fn test_upgrade_version() {
     let (_id, client) = deploy_initialized(&env, &owner);
     env.mock_all_auths();
 
-    let hash = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
+    let hash = upload_test_wasm(&env);
 
     client.upgrade_version(&3u32, &hash);
 
@@ -343,6 +348,8 @@ fn test_upgrade_version() {
 
     let record = client.get_version_record();
     assert!(record.is_some());
+    // The record must carry the hash we upgraded to, not the previous one.
+    assert_eq!(record.unwrap().new_wasm_hash, hash);
 }
 
 #[test]
@@ -352,11 +359,26 @@ fn test_upgrade_rejects_downgrade() {
     let (_id, client) = deploy_initialized(&env, &owner);
     env.mock_all_auths();
 
-    let hash = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
+    let hash = upload_test_wasm(&env);
     client.upgrade_version(&5u32, &hash);
 
     let result = client.try_upgrade_version(&3u32, &hash);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_update_wasm_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // Only the owner may swap the executable. Without mock_all_auths the
+    // default test caller is not the owner, so the swap must be rejected.
+    let result = client.try_update_wasm(&soroban_sdk::BytesN::from_array(&env, &[9u8; 32]));
+    assert!(
+        result.is_err(),
+        "non-owner must not be able to swap the WASM"
+    );
 }
 
 #[test]

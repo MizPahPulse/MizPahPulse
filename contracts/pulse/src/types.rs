@@ -28,7 +28,9 @@ pub struct ContractMeta {
 pub struct VersionRecord {
     pub version: u32,
     pub upgraded_at: u64,
-    pub previous_hash: soroban_sdk::BytesN<32>,
+    /// Hash of the WASM the contract was upgraded TO (was previously
+    /// misleadingly named `previous_hash`).
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
 }
 
 /// Event topic constants - centralized for contract composability
