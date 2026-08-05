@@ -11,6 +11,7 @@ import {
 import { prisma, Prisma } from '@mizpah-pulse/database';
 import { v4 as uuidv4 } from 'uuid';
 import { startWebhookWorker } from './webhook-worker';
+import { startHealthServer, updateHealth, recordProcessedEvent } from './health-check';
 import type { RawStellarEvent } from '@mizpah-pulse/types';
 
 /**
@@ -56,7 +57,18 @@ const activeTimers: ReturnType<typeof setInterval>[] = [];
 // ──────────────────────────────────────────────
 // Horizon SSE Stream
 // ──────────────────────────────────────────────
+
+// Guards against duplicate streams. The old implementation called
+// startHorizonStream() again from the error handler without closing the
+// previous stream, so every reconnect leaked another SSE connection (and
+// each one re-queued the same transactions).
+let horizonStreamActive = false;
+let horizonReconnectAttempts = 0;
+
 async function startHorizonStream() {
+  if (horizonStreamActive) return;
+  horizonStreamActive = true;
+
   const config = getNetworkConfig();
   console.log(`[Ingester] Starting Horizon SSE stream on ${config.network} (${config.horizonUrl})`);
 
@@ -75,14 +87,47 @@ async function startHorizonStream() {
   }
 
   const cursor = lastPagingToken ?? 'now';
+  updateHealth({ horizonConnected: true });
 
   const streamServer = createHorizonServer();
+
+  // Reset the backoff counter once the stream has been up for a while.
+  const resetBackoff = setInterval(() => {
+    horizonReconnectAttempts = 0;
+    clearInterval(resetBackoff);
+  }, 5 * 60_000);
+  resetBackoff.unref?.();
+
+  let closed = false;
+  let lastMessageAt = Date.now();
+  const closeStream = () => {
+    if (closed) return;
+    closed = true;
+    horizonStreamActive = false;
+    clearInterval(watchdog);
+  };
+
+  // Watchdog: if the SSE connection goes silent (no heartbeat or message) for
+  // 90 seconds, treat it as a dead stream and restart. Horizon SSE connections
+  // normally emit keepalives, so this only fires when the socket was dropped
+  // without an error event.
+  const watchdog = setInterval(() => {
+    if (closed) return;
+    if (Date.now() - lastMessageAt > 90_000) {
+      console.warn('[Ingester] Horizon SSE stream silent — restarting');
+      updateHealth({ horizonConnected: false });
+      closeStream();
+      setTimeout(startHorizonStream, 5000);
+    }
+  }, 30_000);
+  watchdog.unref?.();
 
   streamServer
     .transactions()
     .cursor(cursor)
     .stream({
       onmessage: async (tx) => {
+        lastMessageAt = Date.now();
         const rawEvent: RawStellarEvent = {
           source: 'HORIZON',
           type: 'transaction',
@@ -93,12 +138,15 @@ async function startHorizonStream() {
         };
 
         await rawEventQueue.add(`horizon-${uuidv4()}`, rawEvent);
-        console.log(`[Ingester] Queued Horizon tx: ${tx.id}`);
       },
       onerror: (err) => {
         console.error('[Ingester] Horizon SSE error:', err);
-        // Attempt reconnect
-        setTimeout(startHorizonStream, 5000);
+        updateHealth({ horizonConnected: false });
+        closeStream();
+        // Attempt reconnect with capped exponential backoff (5s → 10s → 20s … max 5m)
+        const delay = Math.min(5000 * 2 ** horizonReconnectAttempts, 300_000);
+        horizonReconnectAttempts++;
+        setTimeout(startHorizonStream, delay);
       },
     });
 }
@@ -207,6 +255,7 @@ const eventProcessor = new Worker<RawStellarEvent>(
       });
 
       console.log(`[Processor] Stored event: ${stored.id} (${eventType})`);
+      recordProcessedEvent();
 
       // Publish to Redis Pub/Sub for real-time WebSocket broadcast
       try {
@@ -302,15 +351,33 @@ async function main() {
     console.error('[Ingester] Soroban polling failed to start:', err),
   );
 
+  // Mark Soroban polling as live once it initializes
+  updateHealth({ sorobanPolling: true });
+
   console.log('[Ingester] Event ingestion engine is running');
 
   // Start webhook delivery worker
   const stopWebhookWorker = startWebhookWorker();
 
+  // Start health server (exposes /health via HEALTH_PORT, default 8080)
+  const stopHealthServer = startHealthServer();
+
+  // Periodically refresh queue depth for health reporting
+  const queueTimer = setInterval(async () => {
+    try {
+      const counts = await rawEventQueue.getJobCounts();
+      updateHealth({ queueSize: (counts.waiting ?? 0) + (counts.active ?? 0) });
+    } catch {
+      // Health metrics are best-effort
+    }
+  }, 30_000);
+  activeTimers.push(queueTimer);
+
   // Graceful shutdown
   const shutdown = async () => {
     console.log('[Ingester] Shutting down...');
     stopWebhookWorker();
+    stopHealthServer();
     activeTimers.forEach((t) => clearInterval(t));
     await pubClient?.quit();
     await rawEventQueue.close();
