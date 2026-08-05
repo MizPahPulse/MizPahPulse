@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { isPublicWebhookEndpoint } from '@/lib/ssrf';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,6 +85,18 @@ async function POST(request: Request) {
         ErrorCode.VALIDATION_ERROR,
         'Webhook endpoints must use HTTPS in production',
       );
+    }
+
+    // SSRF guard: the ingester will POST to this endpoint, so it must not
+    // resolve to private/link-local/reserved addresses.
+    if (process.env.NODE_ENV !== 'test') {
+      const endpointCheck = await isPublicWebhookEndpoint(parsed.endpoint);
+      if (!endpointCheck.ok) {
+        return errorResponse(
+          ErrorCode.VALIDATION_ERROR,
+          `Webhook endpoint rejected: ${endpointCheck.reason ?? 'address check failed'}`,
+        );
+      }
     }
 
     const webhook = await prisma.webhookSubscription.create({
