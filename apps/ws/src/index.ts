@@ -1,7 +1,9 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import Redis from 'ioredis';
-import type { LiveEvent, EventCategory, EventType } from '@mizpah-pulse/types';
+import type { LiveEvent } from '@mizpah-pulse/types';
+import { incrementMetric, getWsMetrics } from './metrics';
+import { ConnectionLimiter } from './connection-limiter';
 
 /**
  * MizpahPulse WebSocket Server
@@ -101,12 +103,22 @@ const connectionStats = {
   peakConnections: 0,
 };
 
+const connectionLimiter = new ConnectionLimiter(parseInt(process.env.MAX_CONNECTIONS || '10000', 10));
+
 io.on('connection', (socket) => {
+  // Enforce a max connection limit to protect the server from abuse
+  if (!connectionLimiter.canConnect()) {
+    socket.emit('error', { code: 'CONNECTION_LIMIT_REACHED', message: 'Server is at max capacity' });
+    socket.disconnect(true);
+    return;
+  }
+
   connectionStats.totalConnections++;
   connectionStats.activeConnections = io.engine.clientsCount;
   if (connectionStats.activeConnections > connectionStats.peakConnections) {
     connectionStats.peakConnections = connectionStats.activeConnections;
   }
+  incrementMetric('connections');
 
   console.log(
     `[WS] Client connected: ${socket.id} (active: ${connectionStats.activeConnections})`,
@@ -159,11 +171,13 @@ io.on('connection', (socket) => {
 
   // Client requests stats
   socket.on('stats', () => {
+    incrementMetric('messagesReceived');
     socket.emit('stats', {
       activeConnections: io.engine.clientsCount,
       totalConnections: connectionStats.totalConnections,
       peakConnections: connectionStats.peakConnections,
       uptime: process.uptime(),
+      metrics: getWsMetrics(),
     });
   });
 
