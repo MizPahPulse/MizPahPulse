@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
+import { logger } from '@/lib/logger';
+import { formatError } from '@/lib/error-handler';
 
 export default function ErrorPage({
   error,
@@ -10,7 +12,7 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[ErrorPage] Unhandled error:', error);
+    logger.error('[ErrorPage] Unhandled error:', error);
   }, [error]);
 
   return (
@@ -21,7 +23,7 @@ export default function ErrorPage({
           Something went wrong
         </h1>
         <p className="mt-2 text-slate-500 dark:text-slate-400">
-          An unexpected error occurred. Please try again.
+          {formatError(error).message}. Please try again.
         </p>
         {error.digest && (
           <p className="mt-2 text-xs font-mono text-slate-400 dark:text-slate-500">
