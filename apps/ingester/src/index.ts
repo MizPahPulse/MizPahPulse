@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq';
+import Redis from 'ioredis';
 import { getNetworkConfig, createHorizonServer, getSorobanRpc, categorizeEventType, mapToEventType, normalizeEventPayload } from '@mizpah-pulse/stellar';
-import { prisma } from '@mizpah-pulse/database';
-import { Horizon } from '@stellar/stellar-sdk';
+import { prisma, Prisma } from '@mizpah-pulse/database';
 import { v4 as uuidv4 } from 'uuid';
 import { startWebhookWorker } from './webhook-worker';
 import type { RawStellarEvent } from '@mizpah-pulse/types';
@@ -40,7 +40,7 @@ const processedEventQueue = new Queue(PROCESSED_EVENT_QUEUE, { connection });
 const deadLetterQueue = new Queue(DEAD_LETTER_QUEUE, { connection });
 
 // Redis Pub/Sub client (lazy init in main)
-let pubClient: Awaited<ReturnType<typeof import('ioredis').default>> | null = null;
+let pubClient: Redis | null = null;
 const REDIS_CHANNEL = 'mizpah-pulse:events';
 
 // Track active timers for graceful shutdown
@@ -121,6 +121,7 @@ async function startSorobanPolling() {
       const response = await rpc.getEvents({
         startLedger: lastLedger > 0 ? lastLedger - 1 : undefined,
         limit: 100,
+        filters: [],
       });
 
       if (response.events && response.events.length > 0) {
@@ -192,7 +193,7 @@ const eventProcessor = new Worker<RawStellarEvent>(
           pagingToken: rawEvent.pagingToken ?? `gen-${uuidv4()}`,
           timestamp: rawEvent.capturedAt,
           accountId: normalizedPayload.source_account as string,
-          payload: normalizedPayload,
+          payload: normalizedPayload as Prisma.InputJsonValue,
         },
       });
 
@@ -268,7 +269,6 @@ async function main() {
 
   // Verify Redis connection
   try {
-    const Redis = (await import('ioredis')).default;
     const redis = new Redis(REDIS_URL);
     await redis.ping();
     await redis.quit();
