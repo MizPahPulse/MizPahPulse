@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
-import { EventFilterSchema } from '@mizpah-pulse/types';
+import { EventType, EventCategory, EventSeverity } from '@mizpah-pulse/types';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -9,6 +9,30 @@ import { z } from 'zod';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * URL query schema. Numbers are coerced from strings so invalid input like
+ * `limit=abc` or `minLedger=-5` fails cleanly with a 400 instead of leaking
+ * NaN into a Prisma query (which previously surfaced as a 500).
+ */
+const EventQuerySchema = z.object({
+  eventTypes: z.array(EventType).optional(),
+  categories: z.array(EventCategory).optional(),
+  accountIds: z.array(z.string()).optional(),
+  contractIds: z.array(z.string()).optional(),
+  assetCodes: z.array(z.string()).optional(),
+  severity: z.array(EventSeverity).optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  minLedger: z.coerce.number().int().positive().optional(),
+  maxLedger: z.coerce.number().int().positive().optional(),
+  searchQuery: z.string().max(256).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+type EventQuery = z.infer<typeof EventQuerySchema>;
 
 /**
  * GET /api/v1/events
@@ -36,19 +60,15 @@ export async function GET(request: Request) {
       severity: searchParams.getAll('severity') || undefined,
       startDate: searchParams.get('startDate') || undefined,
       endDate: searchParams.get('endDate') || undefined,
-      minLedger: searchParams.get('minLedger')
-        ? parseInt(searchParams.get('minLedger')!)
-        : undefined,
-      maxLedger: searchParams.get('maxLedger')
-        ? parseInt(searchParams.get('maxLedger')!)
-        : undefined,
+      minLedger: searchParams.get('minLedger') || undefined,
+      maxLedger: searchParams.get('maxLedger') || undefined,
       searchQuery: searchParams.get('q') || undefined,
-      limit: searchParams.get('limit') ? Math.min(parseInt(searchParams.get('limit')!), 100) : 50,
+      limit: searchParams.get('limit') || undefined,
       cursor: searchParams.get('cursor') || undefined,
-      sortOrder: (searchParams.get('sort') as 'asc' | 'desc') || 'desc',
+      sortOrder: searchParams.get('sort') || undefined,
     };
 
-    const filters = EventFilterSchema.parse(rawFilters);
+    const filters: EventQuery = EventQuerySchema.parse(rawFilters);
 
     const where: Record<string, unknown> = {};
 
