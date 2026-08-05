@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import {
-  Networks,
   TransactionBuilder,
   Asset,
   Operation,
@@ -12,7 +11,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
-import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
+import { getNetworkConfig, getExplorerTxUrl, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
  * Transaction sending state
@@ -118,7 +117,7 @@ export function useSendTransaction() {
         // Build the transaction with optional memo (memo MUST be added before building)
         let txBuilder = new TransactionBuilder(sourceAccount, {
           fee: BASE_FEE,
-          networkPassphrase: Networks.TESTNET,
+          networkPassphrase: networkConfig.networkPassphrase,
         })
           .addOperation(paymentOp)
           .setTimeout(30); // 30-second timeout
@@ -133,18 +132,22 @@ export function useSendTransaction() {
         // Step 2: Sign with Freighter
         setState('signing');
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const signedXdr = await signTransaction(tx.toXDR(), { network: 'TESTNET' } as any);
+        const signedXdr = await signTransaction(tx.toXDR(), {
+          networkPassphrase: networkConfig.networkPassphrase,
+        });
 
         // Step 3: Submit to network
         setState('submitting');
 
-        const signedTx = TransactionBuilder.fromXDR(signedXdr.signedTxXdr, Networks.TESTNET);
+        const signedTx = TransactionBuilder.fromXDR(
+          signedXdr.signedTxXdr,
+          networkConfig.networkPassphrase,
+        );
         const submitResult = await horizon.submitTransaction(signedTx);
 
         const txResult: TransactionResult = {
           hash: submitResult.hash,
-          explorerUrl: `https://stellar.expert/explorer/testnet/tx/${submitResult.hash}`,
+          explorerUrl: getExplorerTxUrl(submitResult.hash, networkConfig.network),
           ledger: submitResult.ledger ?? 0,
         };
 
