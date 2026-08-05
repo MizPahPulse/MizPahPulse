@@ -63,3 +63,16 @@ test-results/
 # Playwright
 /home/codespace/.cache/
 contracts/pulse/test_snapshots/
+
+# Build output for packages
+packages/*/dist/
+packages/*/src/*.js
+packages/*/src/*.d.ts
+packages/*/src/*.js.map
+
+# Husky
+.husky/_/
+
+# Prisma generated
+packages/database/src/index.js
+packages/database/src/index.d.ts
