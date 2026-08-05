@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { EventType, EventCategory, EventSeverity } from '@mizpah-pulse/types';
-import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
+import { requireApiKey } from '@/lib/api-key';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -47,6 +48,12 @@ export async function GET(request: Request) {
     keyPrefix: 'events',
   });
   if (rateLimitResult) return rateLimitResult;
+
+  // Validate API keys when presented (and require them when configured).
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
+
+  const requestId = createRequestId();
 
   try {
     const { searchParams } = new URL(request.url);
@@ -108,24 +115,29 @@ export async function GET(request: Request) {
     const hasMore = events.length > filters.limit;
     const data = hasMore ? events.slice(0, filters.limit) : events;
 
-    return successResponse({
-      events: data.map(
-        (e: {
-          id: string;
-          payload: unknown;
-          ledgerSequence: number | bigint;
-          [key: string]: unknown;
-        }) => ({
-          ...e,
-          ledgerSequence: e.ledgerSequence.toString(),
-          payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
-        }),
-      ),
-      total,
-      limit: filters.limit,
-      cursor: hasMore ? data[data.length - 1]?.id : undefined,
-      hasMore,
-    });
+    return successResponse(
+      {
+        events: data.map(
+          (e: {
+            id: string;
+            payload: unknown;
+            ledgerSequence: number | bigint;
+            [key: string]: unknown;
+          }) => ({
+            ...e,
+            ledgerSequence: e.ledgerSequence.toString(),
+            payload: typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload,
+          }),
+        ),
+        total,
+        limit: filters.limit,
+        cursor: hasMore ? data[data.length - 1]?.id : undefined,
+        hasMore,
+      },
+      undefined,
+      undefined,
+      { 'X-Request-ID': requestId },
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       recordRequest(0, true);
@@ -133,10 +145,11 @@ export async function GET(request: Request) {
         ErrorCode.VALIDATION_ERROR,
         'Invalid filter parameters',
         error.flatten() as unknown as Record<string, unknown>,
+        requestId,
       );
     }
     logger.error('[API] Events error:', error);
     recordRequest(0, true);
-    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch events');
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch events', undefined, requestId);
   }
 }

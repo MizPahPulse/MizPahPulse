@@ -3,6 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { successResponse, errorResponse, ErrorCode } from '@/lib/api-errors';
 import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
+import { requireApiKey } from '@/lib/api-key';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,11 @@ const CACHE_TTL = 30_000; // 30 seconds
  *
  * Aggregated dashboard statistics with caching.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // Validate API keys when presented (and require them when configured).
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
+
   try {
     const now = Date.now();
     if (cachedStats && now - cachedStats.timestamp < CACHE_TTL) {
