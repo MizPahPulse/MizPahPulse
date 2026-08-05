@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, cn, Spinner } from '@mizpah-pulse/ui';
+import { Card, CardContent, cn, Skeleton } from '@mizpah-pulse/ui';
 import { Activity, ArrowLeftRight, FileCode, Send, TrendingUp, Wallet } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
@@ -194,7 +194,7 @@ export default function DashboardPage() {
                   {stat.label}
                 </p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                  {loading ? <Spinner size="sm" /> : stat.value}
+                  {loading ? <Skeleton className="h-8 w-20" /> : stat.value}
                 </p>
                 <p className="text-xs font-medium text-slate-400">
                   {loading ? 'Loading…' : dataSource === 'live' ? 'Live from API' : 'Sample data'}
@@ -261,28 +261,39 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-2">
-            {stats.recentActivity.map((event) => (
-              <div
-                key={event.id}
-                className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
-              >
-                <span
-                  className={cn('h-2.5 w-2.5 flex-shrink-0 rounded-full', statusColors.success)}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {event.eventType.replace(/_/g, ' ')}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {event.accountId ? truncateAddress(event.accountId) : '—'}
-                    {event.category ? ` • ${event.category}` : ''}
-                  </p>
-                </div>
-                <span className="ml-auto flex-shrink-0 text-xs text-slate-400 dark:text-slate-500">
-                  {formatTimeAgo(event.timestamp)}
-                </span>
-              </div>
-            ))}
+            {loading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg p-3">
+                    <Skeleton variant="circular" className="h-2.5 w-2.5" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-64" />
+                    </div>
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                ))
+              : stats.recentActivity.map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
+                  >
+                    <span
+                      className={cn('h-2.5 w-2.5 flex-shrink-0 rounded-full', statusColors.success)}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {event.eventType.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {event.accountId ? truncateAddress(event.accountId) : '—'}
+                        {event.category ? ` • ${event.category}` : ''}
+                      </p>
+                    </div>
+                    <span className="ml-auto flex-shrink-0 text-xs text-slate-400 dark:text-slate-500">
+                      {formatTimeAgo(event.timestamp)}
+                    </span>
+                  </div>
+                ))}
           </div>
         </CardContent>
       </Card>
