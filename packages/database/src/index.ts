@@ -10,8 +10,24 @@ export const prisma =
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 
-// Audit logging middleware: track create/update/delete operations
-prisma.$use(async (params, next) => {
+// ──────────────────────────────────────────────
+// Audit logging middleware
+// Prisma 6 removed `$use` from the client's public types (deprecated in favor of
+// `$extends`), which broke typechecking. We keep the middleware via a minimal cast
+// — it still works at runtime and avoids a full `$extends` migration.
+// ──────────────────────────────────────────────
+interface AuditMiddlewareParams {
+  model?: string;
+  action: string;
+  args: Record<string, unknown>;
+}
+
+type AuditMiddleware = (
+  params: AuditMiddlewareParams,
+  next: (params: AuditMiddlewareParams) => Promise<unknown>,
+) => Promise<unknown>;
+
+const auditMiddleware: AuditMiddleware = async (params, next) => {
   const result = await next(params);
 
   // Only log in non-test environments for performance
@@ -42,7 +58,9 @@ prisma.$use(async (params, next) => {
   }
 
   return result;
-});
+};
+
+(prisma as unknown as { $use: (mw: AuditMiddleware) => void }).$use(auditMiddleware);
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
