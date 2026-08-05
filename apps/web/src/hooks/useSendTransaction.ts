@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Networks,
   TransactionBuilder,
@@ -12,6 +12,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
+import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
  * Transaction sending state
@@ -44,6 +45,12 @@ export function useSendTransaction() {
   const [state, setState] = useState<SendTransactionState>('idle');
   const [result, setResult] = useState<TransactionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Use environment-configured network instead of hardcoded URLs
+  const networkConfig = useMemo(() => {
+    const network = (process.env.NEXT_PUBLIC_STELLAR_NETWORK as StellarNetwork) || 'TESTNET';
+    return getNetworkConfig(network);
+  }, []);
 
   /**
    * Send XLM to a destination address on Stellar Testnet
@@ -78,8 +85,7 @@ export function useSendTransaction() {
         }
 
         // Step 1: Build the transaction
-        const horizonUrl = 'https://horizon-testnet.stellar.org';
-        const horizon = new Horizon.Server(horizonUrl);
+        const horizon = new Horizon.Server(networkConfig.horizonUrl);
 
         // Load source account from Horizon
         const sourceAccount = await horizon.loadAccount(publicKey);
@@ -153,7 +159,7 @@ export function useSendTransaction() {
         return null;
       }
     },
-    [publicKey, isConnected],
+    [publicKey, isConnected, networkConfig],
   );
 
   /**

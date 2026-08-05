@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Networks,
   TransactionBuilder,
@@ -13,6 +13,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
+import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
  * Contract invocation states
@@ -47,6 +48,12 @@ export function useContractInvoke(contractId: string) {
   const [result, setResult] = useState<InvokeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Use environment-configured network instead of hardcoded URLs
+  const networkConfig = useMemo(() => {
+    const network = (process.env.NEXT_PUBLIC_STELLAR_NETWORK as StellarNetwork) || 'TESTNET';
+    return getNetworkConfig(network);
+  }, []);
+
   /**
    * Invoke a contract function and return the result
    *
@@ -71,8 +78,8 @@ export function useContractInvoke(contractId: string) {
           throw new Error('INVALID_CONTRACT: The contract ID is invalid. Must start with "C" and be 56 characters.');
         }
 
-        const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
-        const sorobanRpc = new rpc.Server('https://soroban-rpc.testnet.stellar.org');
+        const horizon = new Horizon.Server(networkConfig.horizonUrl);
+        const sorobanRpc = new rpc.Server(networkConfig.sorobanRpcUrl);
 
         // Load source account
         const sourceAccount = await horizon.loadAccount(publicKey);
@@ -141,7 +148,7 @@ export function useContractInvoke(contractId: string) {
         return null;
       }
     },
-    [publicKey, isConnected, contractId],
+    [publicKey, isConnected, contractId, networkConfig],
   );
 
   /**
@@ -180,7 +187,7 @@ export function useContractInvoke(contractId: string) {
         return null;
       }
     },
-    [contractId, publicKey],
+    [contractId, publicKey, networkConfig],
   );
 
   const reset = useCallback(() => {

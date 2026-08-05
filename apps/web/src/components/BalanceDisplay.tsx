@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Horizon } from '@stellar/stellar-sdk';
 import { useWallet } from '@/context/WalletContext';
 import { Spinner, cn } from '@mizpah-pulse/ui';
+import { getNetworkConfig, type StellarNetwork } from '@mizpah-pulse/stellar';
 import { Coins, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface BalanceDisplayProps {
@@ -25,6 +26,11 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const networkConfig = useMemo(() => {
+    const network = (process.env.NEXT_PUBLIC_STELLAR_NETWORK as StellarNetwork) || 'TESTNET';
+    return getNetworkConfig(network);
+  }, []);
+
   const fetchBalance = useCallback(async () => {
     if (!publicKey || !isConnected) return;
 
@@ -32,7 +38,7 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
     setError(null);
 
     try {
-      const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
+      const horizon = new Horizon.Server(networkConfig.horizonUrl);
       const account = await horizon.loadAccount(publicKey);
 
       // Find the native XLM balance
@@ -56,7 +62,7 @@ export function BalanceDisplay({ compact, className }: BalanceDisplayProps) {
     } finally {
       setLoading(false);
     }
-  }, [publicKey, isConnected]);
+  }, [publicKey, isConnected, networkConfig]);
 
   // Fetch on mount, when publicKey changes, and after transactions
   useEffect(() => {
