@@ -108,10 +108,9 @@ describe('error-handler', () => {
   });
 
   it('masks unknown errors in production', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
     const formatted = formatError(new Error('internal db password'));
     expect(formatted.message).toBe('Internal server error');
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 });
