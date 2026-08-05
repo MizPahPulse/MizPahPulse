@@ -8,7 +8,8 @@ import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 import { formatCompactNumber } from '@/lib/format-number';
 import { MAX_EVENT_BUFFER } from '@/lib/constants';
-import { Activity, ArrowUpDown, Filter, SlidersHorizontal, Zap, Radio } from 'lucide-react';
+import { Activity, ArrowUpDown, Check, Filter, SlidersHorizontal, Zap, Radio } from 'lucide-react';
+import { useCallback } from 'react';
 
 /** Maximum number of events to keep in the buffer (from shared constants) */
 
@@ -135,6 +136,29 @@ const categoryVariantMap: Record<string, string> = {
   UNKNOWN: 'default',
 };
 
+const FEED_STORAGE_KEY = 'mizpahpulse.feed.v1';
+
+/** Load previously persisted feed events from localStorage (guarded for SSR/quota). */
+function loadPersistedEvents(): FeedEvent[] {
+  try {
+    if (typeof window === 'undefined') return [];
+    const raw = window.localStorage.getItem(FEED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is FeedEvent => {
+      const cand = e as Partial<FeedEvent>;
+      return (
+        typeof cand?.id === 'string' &&
+        typeof cand?.title === 'string' &&
+        typeof cand?.timestamp === 'number'
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
 const categoryOptions = [
   { label: 'All', value: 'all' },
   { label: 'Payments', value: 'PAYMENT' },
@@ -201,6 +225,59 @@ export default function FeedPage() {
   const [simulating, setSimulating] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+
+  // Restore previously persisted events once on mount (before any new events arrive).
+  useEffect(() => {
+    const restored = loadPersistedEvents();
+    if (restored.length > 0) {
+      idCounter.current = restored.length;
+      setEvents(restored.slice(0, MAX_EVENT_BUFFER));
+    }
+  }, []);
+
+  // Persist the current buffer to localStorage (best-effort, quota-safe).
+  useEffect(() => {
+    if (events.length === 0) return;
+    try {
+      window.localStorage.setItem(FEED_STORAGE_KEY, JSON.stringify(events.slice(0, 50)));
+    } catch {
+      // Storage full or unavailable — persistence is best-effort only.
+    }
+  }, [events]);
+
+  const clearFeed = useCallback(() => {
+    setEvents([]);
+    try {
+      window.localStorage.removeItem(FEED_STORAGE_KEY);
+    } catch {
+      // Ignore storage failures
+    }
+  }, []);
+
+  const copyEvent = useCallback(async (event: FeedEvent) => {
+    const payload = JSON.stringify(
+      {
+        id: event.id,
+        type: event.type,
+        category: event.category,
+        title: event.title,
+        from: event.from,
+        to: event.to,
+        amount: event.amount,
+        timestamp: new Date(event.timestamp).toISOString(),
+      },
+      null,
+      2,
+    );
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopiedEventId(event.id);
+      setTimeout(() => setCopiedEventId((id) => (id === event.id ? null : id)), 1500);
+    } catch {
+      // Clipboard access may be denied — fail silently.
+    }
+  }, []);
 
   // Process incoming WebSocket events
   useEffect(() => {
@@ -348,6 +425,15 @@ export default function FeedPage() {
           >
             Auto-scroll {autoScroll ? 'ON' : 'OFF'}
           </button>
+          {events.length > 0 && (
+            <button
+              onClick={clearFeed}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
+              aria-label="Clear feed"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -494,12 +580,18 @@ export default function FeedPage() {
                 </time>
               </div>
 
-              {/* Hover action */}
+              {/* Hover action: copy the raw event JSON */}
               <button
+                onClick={() => void copyEvent(event)}
                 className="hidden rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-indigo-500 group-hover:block dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
-                aria-label={`Inspect ${event.type} event`}
+                aria-label={`Copy ${event.type} event JSON`}
+                title="Copy event JSON"
               >
-                <Zap className="h-4 w-4" aria-hidden="true" />
+                {copiedEventId === event.id ? (
+                  <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                ) : (
+                  <Zap className="h-4 w-4" aria-hidden="true" />
+                )}
               </button>
             </article>
           ))
