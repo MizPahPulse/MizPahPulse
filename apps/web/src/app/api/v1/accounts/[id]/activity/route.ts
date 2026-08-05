@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
+import { parsePagination, buildPaginationArgs, paginatedResponse } from '@/lib/pagination';
+import { rateLimit } from '@/lib/rate-limit';
 import { isValidPublicKey } from '@mizpah-pulse/stellar';
 
 export const runtime = 'nodejs';
@@ -8,59 +11,63 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/v1/accounts/[id]/activity
  *
- * Fetch paginated activity feed for a specific Stellar account.
+ * Fetch activity summary and recent events for a Stellar account.
  */
-export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
-
-  if (!isValidPublicKey(id)) {
-    return NextResponse.json(
-      { success: false, error: { code: 'INVALID_ADDRESS', message: 'Invalid Stellar public key' } },
-      { status: 400 },
-    );
-  }
-
-  const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-  const cursor = searchParams.get('cursor') || undefined;
-  const category = searchParams.get('category') || undefined;
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } },
+) {
+  const rateLimitResult = await rateLimit(request, {
+    maxRequests: 30,
+    windowMs: 60_000,
+    keyPrefix: 'account-activity',
+  });
+  if (rateLimitResult) return rateLimitResult;
 
   try {
-    const where: Record<string, unknown> = { accountId: id };
-    if (category) where.category = category;
+    const { id } = params;
+    if (!isValidPublicKey(id)) {
+      return errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid Stellar public key');
+    }
 
-    const [events, total] = await Promise.all([
-      prisma.event.findMany({
-        where,
-        orderBy: { timestamp: 'desc' },
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      }),
+    const { searchParams } = new URL(request.url);
+    const pagination = parsePagination(searchParams);
+
+    const where = { accountId: id };
+    const args = buildPaginationArgs(where, pagination);
+
+    const [events, total, paymentCount, contractCount] = await Promise.all([
+      prisma.event.findMany(args),
       prisma.event.count({ where }),
+      prisma.event.count({ where: { ...where, category: 'PAYMENT' } }),
+      prisma.event.count({ where: { ...where, category: 'CONTRACT' } }),
     ]);
 
-    const hasMore = events.length > limit;
-    const data = hasMore ? events.slice(0, limit) : events;
+    const result = paginatedResponse(
+      events as Array<{ id: string } & (typeof events)[0]>,
+      total,
+      pagination,
+    );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        events: data.map((e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
-          ...e,
-          ledgerSequence: e.ledgerSequence.toString(),
-        })),
-        total,
-        limit,
-        cursor: hasMore ? data[data.length - 1]?.id : undefined,
-        hasMore,
+    return successResponse({
+      accountId: id,
+      summary: {
+        totalTransactions: total,
+        payments: paymentCount,
+        contractInteractions: contractCount,
       },
-      meta: { timestamp: new Date().toISOString(), version: 'v1' },
+      ...result,
+      events: result.data.map((e) => ({
+        ...e,
+        ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),
+        payload:
+          typeof (e as unknown as { payload: unknown }).payload === 'string'
+            ? JSON.parse((e as unknown as { payload: string }).payload)
+            : (e as unknown as { payload: unknown }).payload,
+      })),
     });
   } catch (error) {
     console.error('[API] Account activity error:', error);
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch account activity' } },
-      { status: 500 },
-    );
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch account activity');
   }
 }
