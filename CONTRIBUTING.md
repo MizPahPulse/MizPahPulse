@@ -66,6 +66,10 @@ contracts/
 | `npm run db:seed` | Seed database with test data |
 | `npm run db:studio` | Open Prisma Studio |
 
+The root `Makefile` exposes the same workflow as shortcuts: `make setup`,
+`make dev`, `make dev:ws`, `make dev:ingester`, `make test`, `make lint`,
+`make typecheck`, `make build`, `make docker-up`, and `make db-reset`.
+
 ### Testing Contracts
 
 ```bash
