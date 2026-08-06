@@ -154,8 +154,11 @@ npm run docker:up
 cp .env.example .env
 npx prisma generate --schema=packages/database/prisma/schema.prisma
 npx prisma migrate dev --schema=packages/database/prisma/schema.prisma
-npm run dev
+npm run dev:all
 ```
+
+`npm run dev:all` starts the web app, WebSocket service, and ingester together;
+`Ctrl+C` stops all of them.
 
 ### Access Points
 
