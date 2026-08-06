@@ -31,7 +31,8 @@ export function parsePagination(searchParams: URLSearchParams): PaginationParams
   if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
 
   const cursor = searchParams.get('cursor') || undefined;
-  const sortOrder = (searchParams.get('sort') as 'asc' | 'desc') || 'desc';
+  const rawSort = searchParams.get('sort');
+  const sortOrder = rawSort === 'asc' || rawSort === 'desc' ? rawSort : 'desc';
 
   return { limit, cursor, sortOrder };
 }
