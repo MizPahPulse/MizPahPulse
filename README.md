@@ -248,6 +248,8 @@ Full **Freighter wallet** integration on Stellar Testnet with comprehensive erro
 
 ## 📡 API Reference
 
+See [Webhooks](docs/webhooks.md) for payload formats, event examples, and signature verification.
+
 ### REST API (v1)
 
 | Method | Endpoint | Description |
