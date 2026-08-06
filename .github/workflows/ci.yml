@@ -90,6 +90,10 @@ jobs:
       - name: Run tests
         run: npx turbo run test
 
+      - name: Run web coverage
+        working-directory: apps/web
+        run: npm run test:coverage
+
   # ──────────────────────────────────────
   # Build
   # ──────────────────────────────────────
