@@ -10,6 +10,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/', '.next/', '**/*.d.ts', '**/*.config.*'],
+      thresholds: {
+        lines: 15,
+        functions: 30,
+        branches: 60,
+        statements: 15,
+      },
     },
     testTimeout: 10000,
   },
