@@ -84,6 +84,32 @@ cargo build --target wasm32-unknown-unknown --release  # Build WASM
 
 Scopes: `web`, `api`, `ws`, `ingester`, `ui`, `stellar`, `types`, `db`, `contract`
 
+### Issues
+
+#### Finding an issue
+
+Open issues live on the [GitHub issue tracker](https://github.com/MizPahPulse/MizPahPulse/issues).
+Use the labels to find work that fits your skills:
+
+| Category | Label |
+| --- | --- |
+| Bug fixes | `bug` |
+| Features | `enhancement` |
+| Frontend | `frontend` |
+| Backend | `backend` |
+| Infrastructure | `infra` |
+| Testing | `tests` |
+| Documentation | `documentation` |
+| Onboarding-friendly | `good first issue` |
+
+#### Claiming an issue
+
+1. Comment on the issue to say you are taking it.
+2. Create a short-lived branch from `main` and push a draft PR early.
+3. If you cannot finish, leave a comment so another contributor can pick it up.
+
+Use the [pull request template](.github/PULL_REQUEST_TEMPLATE.md) when opening a PR.
+
 ### Pull Requests
 
 1. Create a feature branch from `main`
