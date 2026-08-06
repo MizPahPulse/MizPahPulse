@@ -53,6 +53,12 @@ contracts/
   pulse/        # Soroban smart contract (Rust)
 ```
 
+### Architecture Decisions
+
+Significant architecture decisions are recorded in
+[`docs/adr/`](docs/adr/). New decisions follow
+[`docs/adr/template.md`](docs/adr/template.md).
+
 ### Development Commands
 
 | Command | Description |
