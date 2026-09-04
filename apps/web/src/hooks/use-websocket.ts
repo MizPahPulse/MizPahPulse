@@ -13,6 +13,12 @@ interface UseWebSocketOptions {
 
 interface UseWebSocketReturn {
   isConnected: boolean;
+  /**
+   * Sticky flag: true once the socket has connected at least once. Lets the UI
+   * distinguish "still establishing the first connection" from "the connection
+   * dropped after having been live".
+   */
+  everConnected: boolean;
   lastEvent: unknown;
   connectionStats: {
     activeConnections?: number;
@@ -20,15 +26,23 @@ interface UseWebSocketReturn {
   } | null;
   subscribe: (eventTypes: string[]) => void;
   unsubscribe: (eventTypes: string[]) => void;
+  /**
+   * Tear down the current socket and open a fresh connection. Used by the
+   * "Retry now" action on the reconnecting banner.
+   */
+  reconnect: () => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
   const { eventTypes = [], categories = [], accountIds = [], enabled = true } = options;
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [everConnected, setEverConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<unknown>(null);
   const [connectionStats, setConnectionStats] =
     useState<UseWebSocketReturn['connectionStats']>(null);
+  // Bumped by reconnect() to force the effect below to open a brand-new socket.
+  const [connectionGeneration, setConnectionGeneration] = useState(0);
 
   // Stable keys to avoid re-subscription loops from new array references
   const eventTypesKey = useMemo(() => eventTypes.join(','), [eventTypes]);
@@ -50,6 +64,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
     socket.on('connect', () => {
       setIsConnected(true);
+      setEverConnected(true);
 
       if (eventTypes.length > 0) {
         socket.emit('subscribe:eventTypes', eventTypes);
@@ -83,10 +98,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       socket.disconnect();
       socketRef.current = null;
     };
-    // Only reconnect when enabled changes — filters are handled by the second effect
-  }, [enabled]); // eslint-disable-line
+    // Filter arrays are intentionally excluded — handled by the subscription
+    // effect below so changing them never tears down the socket.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, connectionGeneration]);
 
-  // Re-subscribe when filter arrays change (using stable keys)
+  // Re-subscribe when filter arrays change (using stable keys). The raw arrays
+  // are intentionally omitted: re-emitting is keyed off the joined keys below.
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !isConnected) return;
@@ -94,7 +112,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     socket.emit('subscribe:eventTypes', eventTypes);
     socket.emit('subscribe:categories', categories);
     socket.emit('subscribe:accounts', accountIds);
-    // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTypesKey, categoriesKey, accountIdsKey, isConnected]);
 
   const subscribe = useCallback((types: string[]) => {
@@ -105,5 +123,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     socketRef.current?.emit('unsubscribe:eventTypes', types);
   }, []);
 
-  return { isConnected, lastEvent, connectionStats, subscribe, unsubscribe };
+  const reconnect = useCallback(() => {
+    setConnectionGeneration((generation) => generation + 1);
+  }, []);
+
+  return {
+    isConnected,
+    everConnected,
+    lastEvent,
+    connectionStats,
+    subscribe,
+    unsubscribe,
+    reconnect,
+  };
 }
