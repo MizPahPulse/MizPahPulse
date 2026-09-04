@@ -3,6 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { z } from 'zod';
 import { errorResponse, ErrorCode } from '@/lib/api-errors';
 import { parseLastEventId } from '@/lib/sse';
+import { registerSseClient, installSseShutdownHandlers } from '@/lib/sse-clients';
 import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,11 @@ const LiveEventsQuerySchema = z.object({
  * Server-Sent Events (SSE) endpoint for streaming live blockchain events.
  * Clients connect and receive new events as they are processed. A client can
  * send `Last-Event-ID: <eventId>` to resume from where it left off.
+ *
+ * Every open stream is registered in a process-wide registry
+ * (`lib/sse-clients.ts`). On SIGTERM all connections receive a final
+ * `event: shutdown` frame and are closed, so a deployment never leaves
+ * dangling sockets or clients hanging until their own timeout (#39).
  */
 async function GETHandler(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -45,18 +51,56 @@ async function GETHandler(request: Request) {
   const encoder = new TextEncoder();
   let lastEventId: string | null = parseLastEventId(request.headers.get('last-event-id'));
   let closed = false;
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  let unregister: (() => void) | null = null;
+  let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
 
-  const stream = new ReadableStream({
+  // Wire process-level shutdown handling once (guarded internally). On
+  // SIGTERM every open stream receives `event: shutdown` and is closed, so
+  // deployments do not leave clients hanging until their own timeout.
+  installSseShutdownHandlers();
+
+  const shutdownStream = () => {
+    if (closed) return;
+    closed = true;
+    if (pollInterval) clearInterval(pollInterval);
+    if (unregister) unregister();
+    try {
+      // Closing an already-canceled controller throws, which is fine — the
+      // client already went away and the runtime tore the stream down.
+      controllerRef?.close();
+    } catch {
+      // Ignore — the stream may already be torn down.
+    }
+  };
+
+  const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      controllerRef = controller;
+
+      // Register this connection so a server shutdown can notify + close it.
+      unregister = registerSseClient({
+        enqueue: (frame: string) => {
+          if (closed) return false;
+          try {
+            controller.enqueue(encoder.encode(frame));
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        close: shutdownStream,
+      });
+
       // Send initial connection event
       controller.enqueue(
         encoder.encode(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`),
       );
 
       // Poll for new events every 2 seconds
-      const pollInterval = setInterval(async () => {
+      pollInterval = setInterval(async () => {
         if (closed) {
-          clearInterval(pollInterval);
+          if (pollInterval) clearInterval(pollInterval);
           return;
         }
 
@@ -112,13 +156,10 @@ async function GETHandler(request: Request) {
       }, 2000);
 
       // Cleanup on close
-      request.signal.addEventListener('abort', () => {
-        closed = true;
-        clearInterval(pollInterval);
-      });
+      request.signal.addEventListener('abort', shutdownStream);
     },
     cancel() {
-      closed = true;
+      shutdownStream();
     },
   });
 

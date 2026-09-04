@@ -3,6 +3,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, cn, Skeleton } from '@mizpah-pulse/ui';
 import { Coins, FileCode, DollarSign, Users } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { apiFetch } from '@/lib/api-client';
 
 type RangeKey = '24h' | '7d' | '30d';
@@ -36,6 +45,20 @@ const categoryBarColors: Record<string, string> = {
   GOVERNANCE: 'bg-rose-500',
   SYSTEM: 'bg-slate-500',
   UNKNOWN: 'bg-slate-400',
+};
+
+/** Hex colors for the Recharts area series (mirror of the tailwind palette). */
+const CHART_CATEGORY_COLORS: Record<string, string> = {
+  PAYMENT: '#10b981',
+  DEX: '#a855f7',
+  CONTRACT: '#6366f1',
+  TOKEN: '#f59e0b',
+  NFT: '#ec4899',
+  ACCOUNT: '#0ea5e9',
+  LIQUIDITY: '#14b8a6',
+  GOVERNANCE: '#f43f5e',
+  SYSTEM: '#64748b',
+  UNKNOWN: '#94a3b8',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -153,19 +176,6 @@ function aggregateTopContracts(events: EventItem[]) {
     }));
 }
 
-/** Present-category segments for one bucket, ordered for a stacked bar. */
-function toSegments(bucket: { counts: Record<string, number> }) {
-  const segments = Object.entries(bucket.counts)
-    .filter(([, count]) => count > 0)
-    .map(([category, count]) => ({
-      category,
-      count,
-      color: categoryBarColors[category] ?? 'bg-slate-400',
-    }));
-  if (segments.length === 0) return segments;
-  return segments.sort((a, b) => b.count - a.count);
-}
-
 /** Fallback per-bucket series for a range when the API is unavailable. */
 function fallbackBuckets(
   range: RangeKey,
@@ -262,12 +272,17 @@ export default function AnalyticsPage() {
     return () => controller.abort();
   }, [range, loadAnalytics]);
 
-  const maxTotal = Math.max(
-    0,
-    ...buckets.map((b) => {
-      const counts = b.counts as Record<string, number>;
-      return Object.values(counts).reduce((sum, n) => sum + n, 0);
-    }),
+  // Flatten time-series buckets into Recharts rows (one column per category).
+  const chartData = buckets.map((bucket) => {
+    const row: Record<string, number | string> = { label: bucket.label };
+    const counts = bucket.counts as Record<string, number>;
+    for (const [category, count] of Object.entries(counts)) {
+      if (count > 0) row[category] = count;
+    }
+    return row;
+  });
+  const chartCategories = Array.from(
+    new Set(chartData.flatMap((row) => Object.keys(row).filter((key) => key !== 'label'))),
   );
 
   const metricCards = [
@@ -379,60 +394,85 @@ export default function AnalyticsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div
-            className={cn(
-              'space-y-1',
-              buckets.length > 14 ? 'max-h-80 overflow-y-auto pr-1' : 'h-64',
-            )}
-          >
-            {chartLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton className="h-3 w-12" />
-                  <Skeleton className="h-5 flex-1" />
-                  <Skeleton className="h-3 w-12" />
-                </div>
-              ))
-            ) : buckets.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                No events in the {RANGE_LABELS[range].toLowerCase()} to chart.
-              </p>
-            ) : (
-              buckets.map((bucket) => {
-                const segments = toSegments(bucket);
-                const total = segments.reduce((sum, s) => sum + s.count, 0);
-                const width =
-                  maxTotal > 0 ? Math.max((total / maxTotal) * 100, total > 0 ? 2 : 0) : 0;
-                return (
-                  <div
-                    key={`${bucket.label}-${bucket.start ?? ''}`}
-                    className="flex items-center gap-3"
-                  >
-                    <span className="w-12 flex-shrink-0 text-right text-[10px] text-slate-400">
-                      {bucket.label}
-                    </span>
-                    <div className="flex h-5 flex-1 overflow-hidden rounded-sm bg-slate-100 dark:bg-slate-800">
-                      {segments.length === 0 ? (
-                        <div className="h-full w-full" aria-hidden="true" />
-                      ) : (
-                        segments.map((segment) => (
-                          <div
-                            key={segment.category}
-                            className={`h-full ${segment.color}`}
-                            style={{ width: `${(segment.count / Math.max(1, total)) * width}%` }}
-                            title={`${CATEGORY_LABELS[segment.category] ?? segment.category}: ${segment.count}`}
-                          />
-                        ))
-                      )}
-                    </div>
-                    <span className="w-12 flex-shrink-0 text-[10px] text-slate-500 dark:text-slate-400">
-                      {total}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          {chartLoading ? (
+            <div className="flex h-64 items-end gap-1 px-1" aria-hidden="true">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className={cn('flex-1', ['h-10', 'h-14', 'h-16', 'h-20', 'h-24'][i % 5])}
+                />
+              ))}
+            </div>
+          ) : buckets.length === 0 ? (
+            <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-400">
+              No events in the {RANGE_LABELS[range].toLowerCase()} to chart.
+            </p>
+          ) : (
+            /* Recharts area chart fed by the time-series aggregation (#21). */
+            <div role="img" aria-label="Activity over time chart" className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                  <defs>
+                    {chartCategories.map((category) => (
+                      <linearGradient
+                        key={category}
+                        id={`area-${category}`}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={CHART_CATEGORY_COLORS[category] ?? '#94a3b8'}
+                          stopOpacity={0.4}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={CHART_CATEGORY_COLORS[category] ?? '#94a3b8'}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="currentColor"
+                    className="text-slate-200 dark:text-slate-700"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    minTickGap={28}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={34}
+                    allowDecimals={false}
+                  />
+                  <Tooltip contentStyle={{ fontSize: 12 }} />
+                  {chartCategories.map((category) => (
+                    <Area
+                      key={category}
+                      type="monotone"
+                      dataKey={category}
+                      name={CATEGORY_LABELS[category] ?? category}
+                      stackId="events"
+                      stroke={CHART_CATEGORY_COLORS[category] ?? '#94a3b8'}
+                      fill={`url(#area-${category})`}
+                      strokeWidth={1.5}
+                      dot={false}
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </CardContent>
       </Card>
 

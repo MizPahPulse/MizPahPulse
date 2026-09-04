@@ -269,6 +269,17 @@ Full **Freighter wallet** integration on Stellar Testnet with comprehensive erro
 | `GET` | `/api/v1/webhooks/:id/deliveries` | Delivery attempt history per webhook |
 | `POST` | `/api/v1/webhooks` | Register webhook endpoint |
 | `POST` | `/api/v1/webhooks/batch` | Register up to 50 webhooks atomically |
+| `PATCH` | `/api/v1/webhooks/:id` | Update webhook config |
+| `DELETE` | `/api/v1/webhooks/:id` | Delete webhook endpoint |
+| `POST` | `/api/v1/webhooks/:id/rotate-secret` | Rotate signing secret (returned once) |
+| `POST` | `/api/v1/webhooks/:id/deliveries/:deliveryId/replay` | Re-queue a failed delivery |
+| `GET` | `/api/v1/api-keys` | List API keys (masked) |
+| `POST` | `/api/v1/api-keys` | Create an API key (secret shown once) |
+| `DELETE` | `/api/v1/api-keys/:id` | Revoke an API key |
+| `GET` | `/api/v1/transactions/:hash` | Transaction status (DB + Horizon fallback) |
+
+See [docs/webhooks.md](docs/webhooks.md) for webhook payload examples, the
+`X-Webhook-Signature` format, verification snippets, and retry semantics.
 
 ### WebSocket Events
 

@@ -14,10 +14,45 @@ import {
   TrendingUp,
   Trophy,
   Wallet,
+  X,
 } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 import { apiFetch } from '@/lib/api-client';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+
+/** Getting-started checklist shown to first-time visitors (#19). */
+const ONBOARDING_STEPS = [
+  {
+    id: 'connect-freighter',
+    label: 'Connect your Freighter wallet',
+    desc: 'Link your Stellar wallet to sign and send transactions',
+    href: '/dashboard/wallets',
+  },
+  {
+    id: 'watch-account',
+    label: 'Watch a wallet',
+    desc: 'Track payments and activity for any Stellar account',
+    href: '/dashboard/wallets',
+  },
+  {
+    id: 'create-webhook',
+    label: 'Create a webhook',
+    desc: 'Get notified when events you care about happen',
+    href: '/dashboard/webhooks',
+  },
+  {
+    id: 'invoke-contract',
+    label: 'Invoke the Pulse contract',
+    desc: 'Run your first Soroban smart-contract function',
+    href: '/dashboard/contracts',
+  },
+] as const;
+
+type OnboardingStepId = (typeof ONBOARDING_STEPS)[number]['id'];
+
+const ONBOARDING_STORAGE_KEY = 'mp-onboarding-steps';
+const ONBOARDING_DISMISSED_KEY = 'mp-onboarding-dismissed';
 
 interface RecentActivityItem {
   id: string;
@@ -121,6 +156,35 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // Which top-account address currently shows the "copied" affordance.
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
+
+  // Onboarding checklist progress, persisted in localStorage (#19).
+  const {
+    value: completedSteps,
+    setValue: setCompletedSteps,
+    isLoaded: checklistLoaded,
+  } = useLocalStorage<string[]>(ONBOARDING_STORAGE_KEY, []);
+  const {
+    value: onboardingDismissed,
+    setValue: setOnboardingDismissed,
+    isLoaded: dismissedLoaded,
+  } = useLocalStorage<boolean>(ONBOARDING_DISMISSED_KEY, false);
+  const checklistReady = checklistLoaded && dismissedLoaded;
+  const completedCount = completedSteps.length;
+  const allStepsComplete = ONBOARDING_STEPS.every((step) => completedSteps.includes(step.id));
+
+  /** Toggle a checklist step (clicking the circle). */
+  const toggleChecklistStep = useCallback(
+    (id: OnboardingStepId) => {
+      setCompletedSteps((prev) =>
+        prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+      );
+    },
+    [setCompletedSteps],
+  );
+
+  const dismissOnboarding = useCallback(() => {
+    setOnboardingDismissed(true);
+  }, [setOnboardingDismissed]);
 
   const loadStats = useCallback(async () => {
     setDataSource('loading');
@@ -250,6 +314,89 @@ export default function DashboardPage() {
           </span>
         )}
       </div>
+
+      {/* Onboarding checklist (#19) — hidden permanently once dismissed. */}
+      {checklistReady && !onboardingDismissed && (
+        <Card>
+          <div className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-50 p-2.5 dark:bg-indigo-950">
+                  <Trophy className="h-5 w-5 text-indigo-500" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-slate-900 dark:text-slate-100">
+                    Getting started
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {allStepsComplete
+                      ? 'You\u2019ve completed every step. You\u2019re all set!'
+                      : `${completedCount} of ${ONBOARDING_STEPS.length} steps complete`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={dismissOnboarding}
+                aria-label="Dismiss getting started"
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {!allStepsComplete && (
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                  style={{ width: `${(completedCount / ONBOARDING_STEPS.length) * 100}%` }}
+                />
+              </div>
+            )}
+
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              {ONBOARDING_STEPS.map((step) => {
+                const done = completedSteps.includes(step.id);
+                return (
+                  <li
+                    key={step.id}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                      done
+                        ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/40'
+                        : 'border-slate-100 dark:border-slate-800',
+                    )}
+                  >
+                    <button
+                      onClick={() => toggleChecklistStep(step.id)}
+                      aria-label={`Mark ${step.label} ${done ? 'incomplete' : 'complete'}`}
+                      aria-pressed={done}
+                      className={cn(
+                        'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        done
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-slate-300 text-transparent hover:border-indigo-400 dark:border-slate-600',
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={step.href}
+                        className="block truncate text-sm font-medium text-slate-900 hover:text-indigo-600 dark:text-slate-100 dark:hover:text-indigo-400"
+                      >
+                        {step.label}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {step.desc}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

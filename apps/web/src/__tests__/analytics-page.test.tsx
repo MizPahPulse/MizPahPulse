@@ -14,6 +14,20 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AnalyticsPage from '@/app/dashboard/analytics/page';
 
+// jsdom has no layout engine, so ResponsiveContainer measures 0x0 and charts
+// render nothing. Inject a fixed-size container so the SVG actually renders.
+vi.mock('recharts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('recharts')>();
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
+      React.cloneElement(children as React.ReactElement<{ width?: number; height?: number }>, {
+        width: 600,
+        height: 300,
+      }),
+  };
+});
+
 const fetchMock = vi.fn();
 
 function envelope(data: unknown, ok = true) {
@@ -171,5 +185,48 @@ describe('AnalyticsPage time-range selector (#16)', () => {
 
     expect(await screen.findByText(/Showing sample data/)).toBeInTheDocument();
     expect(screen.getByText('00:00')).toBeInTheDocument(); // fallback hourly labels
+  });
+});
+
+describe('AnalyticsPage time-series chart (#21)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+    fetchMock.mockReset();
+  });
+
+  it('renders a Recharts area chart fed by the timeseries buckets', async () => {
+    await renderLoaded();
+
+    const chart = screen.getByRole('img', { name: 'Activity over time chart' });
+    expect(chart).toBeInTheDocument();
+
+    // The chart surface and at least one area curve render from the API data.
+    expect(chart.querySelector('.recharts-surface')).not.toBeNull();
+    expect(chart.querySelectorAll('.recharts-curve').length).toBeGreaterThan(0);
+    expect(chart.querySelectorAll('.recharts-cartesian-axis-tick').length).toBeGreaterThan(0);
+  });
+
+  it('shows the empty state when the selected range has no events', async () => {
+    fetchMock.mockResolvedValueOnce(envelope(stats()));
+    fetchMock.mockResolvedValueOnce(envelope(eventsPage(0)));
+    fetchMock.mockResolvedValueOnce(envelope(timeseries(0)));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText('No events in the last 24 hours to chart.')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Activity over time chart' })).not.toBeInTheDocument();
+  });
+
+  it('renders a chart from fallback sample data when the API is down', async () => {
+    fetchMock.mockResolvedValueOnce(envelope(stats()));
+    fetchMock.mockResolvedValueOnce(envelope(eventsPage()));
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<AnalyticsPage />);
+
+    await screen.findByText(/Showing sample data/);
+    const chart = screen.getByRole('img', { name: 'Activity over time chart' });
+    expect(chart.querySelectorAll('.recharts-curve').length).toBeGreaterThan(0);
   });
 });
