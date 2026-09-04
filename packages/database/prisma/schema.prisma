@@ -45,6 +45,10 @@ model Event {
   @@index([contractId])
   @@index([assetCode, assetIssuer])
   @@index([timestamp])
+  // Composite indexes (issues #46, #52): analytics-by-type queries and
+  // cursor pagination sort by (eventType, timestamp) / (timestamp, id).
+  @@index([eventType, timestamp])
+  @@index([timestamp, id])
   @@index([transactionHash])
   @@index([ledgerSequence])
   @@index([pagingToken])
@@ -121,16 +125,17 @@ model MonitoredEvent {
 // API Keys
 // ──────────────────────────────────────────────
 model ApiKey {
-  id          String    @id @default(cuid())
-  userId      String
-  walletId    String?
-  key         String    @unique
-  name        String
-  permissions Json      @default("[\"read\"]")
-  isActive    Boolean   @default(true)
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id             String    @id @default(cuid())
+  userId         String
+  walletId       String?
+  key            String    @unique
+  name           String
+  permissions    Json      @default("[\"read\"]")
+  isActive       Boolean   @default(true)
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  keyFingerprint String? // HMAC-SHA256(key) signed with API_KEY_SECRET (issue #28)
+  createdAt      DateTime  @default(now())
 
   wallet MonitoredWallet? @relation(fields: [walletId], references: [id], onDelete: SetNull)
 

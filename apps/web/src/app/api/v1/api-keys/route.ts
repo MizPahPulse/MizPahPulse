@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@mizpah-pulse/database';
 import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
+import { fingerprintApiKey } from '@/lib/api-key';
 import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { withRequestId } from '@/lib/request-id';
@@ -143,12 +144,15 @@ async function POSTHandler(request: Request) {
     const generatedKey = `${network === 'test' ? 'mp_test_' : 'mp_live_'}${randomBytes(24).toString('base64url')}`;
     const permissions = parsed.permissions;
 
+    // Issue #28: when API_KEY_SECRET is set, store an HMAC fingerprint of
+    // the secret so authentication can reject copied database rows.
     const created = await prisma.apiKey.create({
       data: {
         userId,
         key: generatedKey,
         name: parsed.name,
         permissions: JSON.stringify(permissions),
+        keyFingerprint: fingerprintApiKey(generatedKey),
       },
     });
 

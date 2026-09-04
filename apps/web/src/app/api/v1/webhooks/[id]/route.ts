@@ -3,6 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { EventType } from '@mizpah-pulse/types';
 import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
+import { requireApiKey } from '@/lib/api-key';
 import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
@@ -41,6 +42,9 @@ async function DELETEHandler(
   request: Request,
   props: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
+
   try {
     const { id } = await props.params;
     const webhook = await prisma.webhookSubscription.findUnique({ where: { id } });
@@ -69,6 +73,9 @@ async function PATCHHandler(
     keyPrefix: 'webhooks:update',
   });
   if (rateLimitResult.limited) return rateLimitResult.response!;
+
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
 
   const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
 

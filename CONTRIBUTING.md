@@ -80,7 +80,80 @@ cargo test          # Run all tests
 cargo build --target wasm32-unknown-unknown --release  # Build WASM
 ```
 
-### Commit Convention
+### Issue Tracker Workflow
+
+Issues are the single source of truth for planned work. Before opening a PR,
+find (or file) an issue and get it assigned.
+
+#### Finding an issue
+
+- The [`good first issue`](https://github.com/MizPahPulse/MizPahPulse/labels/good%20first%20issue)
+  label marks small, well-scoped tasks with guidance in the body.
+- The [`help wanted`](https://github.com/MizPahPulse/MizPahPulse/labels/help%20wanted)
+  label marks issues that are ready for an external contributor.
+- Area labels tell you which part of the codebase an issue touches:
+
+  | Label | Covers |
+  |-------|--------|
+  | [`backend`](https://github.com/MizPahPulse/MizPahPulse/labels/backend) | API routes, WebSocket server, ingester worker |
+  | [`frontend`](https://github.com/MizPahPulse/MizPahPulse/labels/frontend) | Next.js dashboard, UI components, hooks, styling |
+  | [`database`](https://github.com/MizPahPulse/MizPahPulse/labels/database) | Prisma schema, migrations, queries, seeds |
+  | [`smart contract`](https://github.com/MizPahPulse/MizPahPulse/labels/smart%20contract) | Soroban Rust contract |
+  | [`infra`](https://github.com/MizPahPulse/MizPahPulse/labels/infra) | CI/CD, Docker, deployment, observability |
+  | [`tests`](https://github.com/MizPahPulse/MizPahPulse/labels/tests) | Unit, integration, e2e, contract tests |
+  | [`dx`](https://github.com/MizPahPulse/MizPahPulse/labels/dx) | Developer experience and tooling |
+  | [`performance`](https://github.com/MizPahPulse/MizPahPulse/labels/performance) | Performance and optimization |
+  | [`documentation`](https://github.com/MizPahPulse/MizPahPulse/labels/documentation) | Docs, README, guides |
+  | [`accessibility`](https://github.com/MizPahPulse/MizPahPulse/labels/accessibility) | A11y improvements |
+
+#### Claiming an issue
+
+1. Comment on the issue with a short plan so maintainers know it is being
+   worked on (or use GitHub's issue assignment if you are a maintainer).
+2. Link the issue in your PR description with `Closes #<number>` so it closes
+   automatically when the PR merges.
+3. If you cannot finish, say so on the issue so someone else can pick it up —
+   unassign yourself rather than leaving it stale.
+
+#### Filing a new issue
+
+Use the issue templates: pick `Bug report` for something broken, `Feature
+request` for new functionality, and `Documentation` for docs gaps. Search for
+an existing issue first — duplicates are closed.
+
+### Pull Requests
+
+1. Create a feature branch from `main`
+2. Make your changes with clear commit messages
+3. Ensure tests pass: `npm run test`
+4. Ensure linting passes: `npm run lint`
+5. Open a PR with a clear description
+
+PRs use the [pull request template](.github/PULL_REQUEST_TEMPLATE.md) — fill
+in the summary, reference the issues you close (`Closes #<number>`, one per
+line), list your changes, and tick the verification checklist. A PR that does
+not close an issue should say why the work is needed anyway.
+
+### Makefile
+
+A [`Makefile`](Makefile) centralizes the most common developer commands. On
+any machine with `make`, you can run:
+
+```bash
+make setup        # install deps, start Docker services, push schema, seed
+make dev          # start all apps in dev mode
+make dev:ws       # WebSocket server only
+make dev:ingester # ingester only
+make test         # run all tests
+make lint         # lint all packages
+make typecheck    # typecheck all packages
+make build        # build everything
+make docker-up    # start Postgres + Redis
+make db-reset     # reset the database and re-seed
+```
+
+The targets delegate to the existing `npm`/`turbo` scripts, so the two are
+always equivalent.
 
 - `feat(scope):` New features
 - `fix(scope):` Bug fixes

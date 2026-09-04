@@ -1,6 +1,7 @@
 import { prisma } from '@mizpah-pulse/database';
 import { generateWebhookSecret } from '@mizpah-pulse/stellar';
 import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
+import { requireApiKey } from '@/lib/api-key';
 import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { sanitizeWebhook } from '@/lib/webhook-utils';
@@ -25,6 +26,9 @@ async function POSTHandler(request: Request, props: { params: Promise<{ id: stri
     keyPrefix: 'webhooks:rotate-secret',
   });
   if (rateLimitResult.limited) return rateLimitResult.response!;
+
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
 
   const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
 

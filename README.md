@@ -157,6 +157,10 @@ npx prisma migrate dev --schema=packages/database/prisma/schema.prisma
 npm run dev
 ```
 
+> **Tip:** `npm run dev:all` starts **web**, **ws**, and **ingester** together
+> with labeled, colored output (Ctrl+C stops all three). To start just one,
+> use `npm run dev -w apps/web` (or `-w apps/ws` / `-w apps/ingester`).
+
 ### Access Points
 
 | Service | URL |
