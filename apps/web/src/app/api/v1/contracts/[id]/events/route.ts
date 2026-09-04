@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { parsePagination, buildPaginationArgs, paginatedResponse } from '@/lib/pagination';
 import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * Query validation for the event-type filter (issue #32): values must be
+ * non-empty strings and the list is capped to keep Prisma `IN` clauses sane.
+ */
+const ContractEventsQuerySchema = z.object({
+  eventTypes: z.array(z.string().min(1).max(64)).max(20).optional(),
+});
 
 /**
  * GET /api/v1/contracts/[id]/events
@@ -27,10 +36,22 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     }
 
     const { searchParams } = new URL(request.url);
+
+    const queryResult = ContractEventsQuerySchema.safeParse({
+      eventTypes: searchParams.getAll('eventType'),
+    });
+    if (!queryResult.success) {
+      return errorResponse(
+        ErrorCode.VALIDATION_ERROR,
+        'Invalid event type filter',
+        queryResult.error.flatten() as unknown as Record<string, unknown>,
+      );
+    }
+    const eventTypes = queryResult.data.eventTypes ?? [];
+
     const pagination = parsePagination(searchParams);
 
     const where: Record<string, unknown> = { contractId: id };
-    const eventTypes = searchParams.getAll('eventType');
     if (eventTypes.length > 0) {
       where.eventType = { in: eventTypes };
     }
@@ -49,7 +70,12 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
     return successResponse({
       contractId: id,
-      ...result,
+      total: result.total,
+      limit: result.limit,
+      cursor: result.cursor,
+      hasMore: result.hasMore,
+      // NOTE: never spread `result.data` (raw Prisma rows) here — BigInt
+      // `ledgerSequence` values are not JSON-serializable. Normalize first.
       events: result.data.map((e) => ({
         ...e,
         ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),

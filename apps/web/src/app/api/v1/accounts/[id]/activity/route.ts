@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
-import { parsePagination, buildPaginationArgs, paginatedResponse } from '@/lib/pagination';
+import { buildPaginationArgs, paginatedResponse, type PaginationParams } from '@/lib/pagination';
 import { rateLimit } from '@/lib/rate-limit';
 import { isValidPublicKey } from '@mizpah-pulse/stellar';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * Query validation for the cursor-paginated activity feed (issue #32): invalid
+ * or out-of-range `limit`/`cursor`/`sort` values fail with a 400 instead of
+ * being silently coerced, matching the other v1 endpoints.
+ */
+const ActivityQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(128).optional(),
+  sort: z.enum(['asc', 'desc']).default('desc'),
+});
 
 /**
  * GET /api/v1/accounts/[id]/activity
@@ -28,7 +40,25 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     }
 
     const { searchParams } = new URL(request.url);
-    const pagination = parsePagination(searchParams);
+
+    const queryResult = ActivityQuerySchema.safeParse({
+      limit: searchParams.get('limit') || undefined,
+      cursor: searchParams.get('cursor') || undefined,
+      sort: searchParams.get('sort') || undefined,
+    });
+    if (!queryResult.success) {
+      return errorResponse(
+        ErrorCode.VALIDATION_ERROR,
+        'Invalid pagination parameters',
+        queryResult.error.flatten() as unknown as Record<string, unknown>,
+      );
+    }
+
+    const pagination: PaginationParams = {
+      limit: queryResult.data.limit,
+      cursor: queryResult.data.cursor,
+      sortOrder: queryResult.data.sort,
+    };
 
     const where = { accountId: id };
     const args = buildPaginationArgs(where, pagination);
@@ -53,7 +83,12 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         payments: paymentCount,
         contractInteractions: contractCount,
       },
-      ...result,
+      total: result.total,
+      limit: result.limit,
+      cursor: result.cursor,
+      hasMore: result.hasMore,
+      // NOTE: never spread `result.data` (raw Prisma rows) here — BigInt
+      // `ledgerSequence` values are not JSON-serializable. Normalize first.
       events: result.data.map((e) => ({
         ...e,
         ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),

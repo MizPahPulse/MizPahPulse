@@ -1,22 +1,48 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
+import { z } from 'zod';
+import { errorResponse, ErrorCode } from '@/lib/api-errors';
+import { parseLastEventId } from '@/lib/sse';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Query validation for the live stream. Filters must be non-empty strings and
+ * are capped so a single request can't ask the server to fan out hundreds of
+ * `IN` clauses (issue #32).
+ */
+const LiveEventsQuerySchema = z.object({
+  categories: z.array(z.string().min(1).max(64)).max(20).optional(),
+  eventTypes: z.array(z.string().min(1).max(64)).max(20).optional(),
+});
+
+/**
  * GET /api/v1/events/live
  *
  * Server-Sent Events (SSE) endpoint for streaming live blockchain events.
- * Clients connect and receive new events as they are processed.
+ * Clients connect and receive new events as they are processed. A client can
+ * send `Last-Event-ID: <eventId>` to resume from where it left off.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const categories = searchParams.getAll('category');
-  const eventTypes = searchParams.getAll('eventType');
+
+  const queryResult = LiveEventsQuerySchema.safeParse({
+    categories: searchParams.getAll('category'),
+    eventTypes: searchParams.getAll('eventType'),
+  });
+  if (!queryResult.success) {
+    return errorResponse(
+      ErrorCode.VALIDATION_ERROR,
+      'Invalid live stream filter parameters',
+      queryResult.error.flatten() as unknown as Record<string, unknown>,
+    );
+  }
+  const categories = queryResult.data.categories ?? [];
+  const eventTypes = queryResult.data.eventTypes ?? [];
 
   const encoder = new TextEncoder();
-  let lastEventId: string | null = null;
+  let lastEventId: string | null = parseLastEventId(request.headers.get('last-event-id'));
   let closed = false;
 
   const stream = new ReadableStream({

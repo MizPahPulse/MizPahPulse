@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import type { LiveEvent } from '@mizpah-pulse/types';
 import { incrementMetric, getWsMetrics } from './metrics';
 import { ConnectionLimiter } from './connection-limiter';
+import { buildHealthPayload } from './health';
 
 /**
  * MizpahPulse WebSocket Server
@@ -23,7 +24,24 @@ const REDIS_CHANNEL = 'mizpah-pulse:events';
 // ──────────────────────────────────────────────
 // HTTP + Socket.io Setup
 // ──────────────────────────────────────────────
-const httpServer = createServer((_req, res) => {
+const httpServer = createServer((req, res) => {
+  const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+
+  if (pathname === '/health') {
+    const payload = buildHealthPayload({
+      service: 'MizpahPulse WebSocket Server',
+      version: '0.0.1',
+      uptime: process.uptime(),
+      activeConnections: io.engine.clientsCount,
+      totalConnections: connectionStats.totalConnections,
+      peakConnections: connectionStats.peakConnections,
+      redisConnected: sub.status === 'ready',
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(payload));
+    return;
+  }
+
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(
     JSON.stringify({
