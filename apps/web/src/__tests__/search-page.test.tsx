@@ -147,21 +147,30 @@ describe('SearchPage keyboard navigation', () => {
     vi.restoreAllMocks();
   });
 
+  // NOTE: state-driven DOM (aria-activedescendant, the selected option) is
+  // asserted with waitFor rather than synchronously after fireEvent: under
+  // React 18's concurrent scheduler the DOM commit for a discrete keydown
+  // update can land a tick after the event returns (observed flaky on the
+  // Node 22 CI runtime), so the assertions poll until the commit is visible.
   it('moves the active result with ArrowDown and exposes it via aria-activedescendant', async () => {
     const input = await renderWithResults();
 
     expect(input.getAttribute('aria-activedescendant')).toBeNull();
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(input.getAttribute('aria-activedescendant')).toBe(
-      'search-result-account-GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-    );
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).toBe(
+        'search-result-account-GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      );
+    });
     expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Account');
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(input.getAttribute('aria-activedescendant')).toBe(
-      'search-result-tx-abcdef0123456789abcdef0123456789abcdef0123456789',
-    );
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).toBe(
+        'search-result-tx-abcdef0123456789abcdef0123456789abcdef0123456789',
+      );
+    });
     expect(screen.getByRole('option', { selected: true })).toHaveTextContent('TX');
   });
 
@@ -170,9 +179,11 @@ describe('SearchPage keyboard navigation', () => {
 
     // From no selection, ArrowUp wraps to the last result (the tx).
     fireEvent.keyDown(input, { key: 'ArrowUp' });
-    expect(input.getAttribute('aria-activedescendant')).toBe(
-      'search-result-tx-abcdef0123456789abcdef0123456789abcdef0123456789',
-    );
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).toBe(
+        'search-result-tx-abcdef0123456789abcdef0123456789abcdef0123456789',
+      );
+    });
     expect(screen.getByRole('option', { selected: true }).className).toContain('ring-indigo-500');
   });
 
@@ -181,6 +192,12 @@ describe('SearchPage keyboard navigation', () => {
     const input = await renderWithResults();
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
+    // Wait for the ArrowDown commit to land so Enter reads the updated selection.
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).toBe(
+        'search-result-account-GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      );
+    });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -194,10 +211,14 @@ describe('SearchPage keyboard navigation', () => {
     const input = await renderWithResults();
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(input.getAttribute('aria-activedescendant')).not.toBeNull();
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).not.toBeNull();
+    });
 
     fireEvent.keyDown(input, { key: 'Escape' });
-    expect(input.getAttribute('aria-activedescendant')).toBeNull();
+    await waitFor(() => {
+      expect(input.getAttribute('aria-activedescendant')).toBeNull();
+    });
     expect(screen.queryByRole('option', { selected: true })).not.toBeInTheDocument();
   });
 });

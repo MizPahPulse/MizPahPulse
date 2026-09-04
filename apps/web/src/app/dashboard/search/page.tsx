@@ -101,11 +101,6 @@ export default function SearchPage() {
 
   const activeItem = activeIndex >= 0 && activeIndex < items.length ? items[activeIndex] : null;
 
-  // Reset the active result whenever the result set changes.
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [items]);
-
   // Global ⌘K / Ctrl+K shortcut — focus the search box from anywhere
   const focusSearch = useCallback(() => {
     inputRef.current?.focus();
@@ -144,6 +139,7 @@ export default function SearchPage() {
       setResults(null);
       setError(null);
       setPagination(null);
+      setActiveIndex(-1);
       return;
     }
 
@@ -156,6 +152,10 @@ export default function SearchPage() {
         const data = await res.json();
         if (seq !== searchSeqRef.current) return; // a newer query superseded this one
         if (data.success) {
+          // Reset the arrow-key selection in the same batch as the new results:
+          // a separate passive effect could flush late (React 18 defers passive
+          // effects) and wipe a selection the user just made via keyboard.
+          setActiveIndex(-1);
           setResults(data.data.results);
           setPagination(data.data.pagination ?? null);
         } else {
