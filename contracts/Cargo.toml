@@ -5,7 +5,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-soroban-sdk = "21.0.1"
+soroban-sdk = "27.0.6"
 
 [workspace.metadata]
 stellar-network = "testnet"
