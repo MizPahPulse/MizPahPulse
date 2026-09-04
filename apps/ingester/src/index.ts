@@ -15,6 +15,7 @@ import { startHealthServer, updateHealth, recordProcessedEvent } from './health-
 import { runEventRetention, parseRetentionDays, RETENTION_INTERVAL_MS } from './retention';
 import { initSentry, installProcessHandlers } from './sentry';
 import { rollupPreviousDay, DAILY_STATS_INTERVAL_MS } from './daily-stats';
+import { createWalletSyncService, type WalletSyncService } from './monitored-sync';
 import type { RawStellarEvent } from '@mizpah-pulse/types';
 
 /**
@@ -53,6 +54,9 @@ const deadLetterQueue = new Queue(DEAD_LETTER_QUEUE, { connection });
 // Redis Pub/Sub client (lazy init in main)
 let pubClient: Redis | null = null;
 const REDIS_CHANNEL = 'mizpah-pulse:events';
+
+// Monitored-wallet sync tracker (issue #49), created once the DB is reachable.
+let walletSync: WalletSyncService | null = null;
 
 // Track active timers for graceful shutdown
 const activeTimers: ReturnType<typeof setInterval>[] = [];
@@ -260,6 +264,20 @@ const eventProcessor = new Worker<RawStellarEvent>(
       console.log(`[Processor] Stored event: ${stored.id} (${eventType})`);
       recordProcessedEvent();
 
+      // Track monitored-wallet `lastSyncedAt` (issue #49). Best-effort and
+      // throttled inside the service — a failure here must not fail the job.
+      try {
+        const sync = await walletSync?.handleAccountActivity(stored.accountId);
+        if (sync?.matched) {
+          console.log(
+            `[Processor] Monitored wallet sync for ${stored.accountId}: ` +
+              `${sync.updated} updated, ${sync.throttled} throttled`,
+          );
+        }
+      } catch (syncErr) {
+        console.error('[Processor] Monitored wallet sync error:', syncErr);
+      }
+
       // Publish to Redis Pub/Sub for real-time WebSocket broadcast
       try {
         await pubClient?.publish(
@@ -327,6 +345,7 @@ async function main() {
   try {
     await prisma.$connect();
     console.log('[Ingester] Database connected');
+    walletSync = createWalletSyncService(prisma);
   } catch (err) {
     console.error('[Ingester] Database connection failed:', err);
     process.exit(1);

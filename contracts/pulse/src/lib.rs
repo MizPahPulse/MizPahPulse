@@ -17,6 +17,9 @@
 //! | `MULTISIG` | instance | `(Vec<Address>, u32)` | Signer set + approval threshold |
 //! | `VERSION` | persistent | [`VersionRecord`] | Upgrade audit trail (version, timestamp, wasm hash) |
 //! | `MAX_COUNT` | instance | `u32` | Owner-configured pulse cap (unset = unlimited) |
+//! | `DFLT_RLIM` | persistent | `u64` | Default per-address pulse interval in seconds (`0` = disabled) |
+//! | `(ADDR_RLIM, Address)` | persistent | `u64` | Per-address rate-limit override (`0` clears → default applies) |
+//! | `(RL_LAST, Address)` | persistent | `u64` | Last pulse ledger timestamp per address (enforcement) |
 //!
 //! ## Error codes
 //!
@@ -105,6 +108,18 @@ const RX_PULSE_KEY: Symbol = symbol_short!("RX_PULSE");
 /// Key for storing the owner-configured maximum pulse count (issue #64).
 /// When unset, the cap defaults to `u32::MAX` (effectively unlimited).
 const MAX_PULSE_COUNT_KEY: Symbol = symbol_short!("MAX_COUNT");
+
+/// Storage key for the default per-address rate limit in seconds (issue #59).
+/// When 0 (unset) rate limiting is disabled unless an address override exists.
+const DEFAULT_RATE_LIMIT_KEY: Symbol = symbol_short!("DFLT_RLIM");
+
+/// Storage-key prefix for per-address rate-limit overrides; the full key is
+/// the tuple `(ADDRESS_RATE_LIMIT_KEY, Address)` (issue #59).
+const ADDRESS_RATE_LIMIT_KEY: Symbol = symbol_short!("ADDR_RLIM");
+
+/// Storage-key prefix for the last pulse ledger timestamp per address; the
+/// full key is the tuple `(ADDRESS_LAST_PULSE_KEY, Address)` (issue #59).
+const ADDRESS_LAST_PULSE_KEY: Symbol = symbol_short!("RL_LAST");
 
 /// ──────────────────────────────────────────────
 /// Event Topics
@@ -486,6 +501,86 @@ impl PulseContract {
         Self::pulse(env, caller)
     }
 
+    /// ── Per-Address Rate Limits (issue #59) ──
+
+    /// Configure the default minimum interval (in seconds) between pulses for
+    /// any address that has no per-address override. Owner only. Passing `0`
+    /// clears the default and disables rate limiting.
+    pub fn set_default_rate_limit(
+        env: Env,
+        min_interval_seconds: u64,
+    ) -> Result<(), PulseError> {
+        get_or_create_meta(&env).owner.require_auth();
+
+        env.storage()
+            .persistent()
+            .set(&DEFAULT_RATE_LIMIT_KEY, &min_interval_seconds);
+
+        env.events().publish(
+            (symbol_short!("config"), symbol_short!("rate_def")),
+            min_interval_seconds,
+        );
+
+        log!(
+            &env,
+            "Default pulse rate limit set to {}s",
+            min_interval_seconds
+        );
+        Ok(())
+    }
+
+    /// Get the configured default rate limit in seconds (`0` when disabled).
+    pub fn get_default_rate_limit(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get::<Symbol, u64>(&DEFAULT_RATE_LIMIT_KEY)
+            .unwrap_or(0)
+    }
+
+    /// Configure a per-address rate-limit override in seconds (owner only).
+    /// The override takes precedence over the default limit. Passing `0`
+    /// clears the override so the address falls back to the default limit.
+    pub fn set_address_rate_limit(
+        env: Env,
+        address: Address,
+        min_interval_seconds: u64,
+    ) -> Result<(), PulseError> {
+        get_or_create_meta(&env).owner.require_auth();
+
+        env.storage().persistent().set(
+            &(ADDRESS_RATE_LIMIT_KEY, address.clone()),
+            &min_interval_seconds,
+        );
+
+        env.events().publish(
+            (symbol_short!("config"), symbol_short!("rate_addr")),
+            (address.clone(), min_interval_seconds),
+        );
+
+        log!(
+            &env,
+            "Pulse rate limit for {} set to {}s",
+            address,
+            min_interval_seconds
+        );
+        Ok(())
+    }
+
+    /// Get the per-address override in seconds (`0` when none is configured).
+    pub fn get_address_rate_limit(env: Env, address: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get::<(Symbol, Address), u64>(&(ADDRESS_RATE_LIMIT_KEY, address))
+            .unwrap_or(0)
+    }
+
+    /// Get the effective limit for an address: the per-address override when
+    /// set, otherwise the global default. Falls back to `0` (no limiting)
+    /// when nothing is configured.
+    pub fn get_effective_rate_limit(env: Env, address: Address) -> u64 {
+        effective_rate_limit(&env, &address)
+    }
+
     /// ── Gas Optimization ──────────────────────
 
     /// Get the current gas cost estimate for a pulse operation.
@@ -560,49 +655,39 @@ impl PulseContract {
     /// Each call records the caller and increments the count.
     pub fn pulse(env: Env, caller: Symbol) -> Result<u32, PulseError> {
         ensure_not_paused(&env)?;
+        validate_caller_symbol(&env, &caller)?;
+        fire_pulse(&env, caller)
+    }
 
-        // Validate caller: reject empty or zero-length symbols
-        {
-            let empty = Symbol::new(&env, "");
-            if caller == empty {
-                return Err(PulseError::InvalidCaller);
+    /// Address-bound pulse that honors the per-address rate limit (issue #59).
+    ///
+    /// The pulsing `address` must authorize the call, so rate limits cannot be
+    /// bypassed by spoofing another address. The effective minimum interval is
+    /// the address's own override when configured, otherwise the global
+    /// default set by `set_default_rate_limit`. When no limit is configured
+    /// this behaves exactly like `pulse()`.
+    pub fn pulse_from(env: Env, address: Address, caller: Symbol) -> Result<u32, PulseError> {
+        ensure_not_paused(&env)?;
+        address.require_auth();
+        validate_caller_symbol(&env, &caller)?;
+
+        let limit = effective_rate_limit(&env, &address);
+        if limit > 0 {
+            let now = env.ledger().timestamp();
+            let key = (ADDRESS_LAST_PULSE_KEY, address.clone());
+            let last = env
+                .storage()
+                .persistent()
+                .get::<(Symbol, Address), u64>(&key)
+                .unwrap_or(0);
+
+            if last > 0 && now.saturating_sub(last) < limit {
+                return Err(PulseError::CooldownActive);
             }
+            env.storage().persistent().set(&key, &now);
         }
 
-        // Load existing pulse data or create new
-        let mut data = env
-            .storage()
-            .instance()
-            .get::<Symbol, PulseData>(&PULSE_KEY)
-            .unwrap_or(PulseData {
-                count: 0,
-                last_caller: None,
-                last_pulse_at: None,
-            });
-
-        // Increment with overflow protection, then enforce the owner-configured
-        // cap (issue #64). The counter is not persisted until after the checks,
-        // so a rejected pulse leaves storage untouched.
-        data.count = data
-            .count
-            .checked_add(1)
-            .ok_or(PulseError::CounterOverflow)?;
-        if data.count > pulse_cap(&env) {
-            return Err(PulseError::PulseCapReached);
-        }
-        data.last_caller = Some(caller.clone());
-        data.last_pulse_at = Some(env.ledger().timestamp());
-
-        // Store updated data
-        env.storage().instance().set(&PULSE_KEY, &data);
-
-        // Emit a pulse event with detailed topics for indexing
-        env.events()
-            .publish((TOPIC_PULSE, TOPIC_FIRED), (data.count, caller.clone()));
-
-        log!(&env, "Pulse #{} fired by {}", data.count, caller);
-
-        Ok(data.count)
+        fire_pulse(&env, caller)
     }
 
     /// Get the current pulse count without modifying state.
@@ -802,6 +887,70 @@ fn ensure_not_paused(env: &Env) -> Result<(), PulseError> {
         return Err(PulseError::ContractPaused);
     }
     Ok(())
+}
+
+/// Reject empty caller symbols before any state change.
+fn validate_caller_symbol(env: &Env, caller: &Symbol) -> Result<(), PulseError> {
+    let empty = Symbol::new(env, "");
+    if caller == &empty {
+        return Err(PulseError::InvalidCaller);
+    }
+    Ok(())
+}
+
+/// Shared counter increment used by `pulse()` and `pulse_from()`: overflow
+/// check, owner-configured cap enforcement, persistence, and event emission.
+fn fire_pulse(env: &Env, caller: Symbol) -> Result<u32, PulseError> {
+    // Load existing pulse data or create new
+    let mut data = env
+        .storage()
+        .instance()
+        .get::<Symbol, PulseData>(&PULSE_KEY)
+        .unwrap_or(PulseData {
+            count: 0,
+            last_caller: None,
+            last_pulse_at: None,
+        });
+
+    // Increment with overflow protection, then enforce the owner-configured
+    // cap (issue #64). The counter is not persisted until after the checks,
+    // so a rejected pulse leaves storage untouched.
+    data.count = data
+        .count
+        .checked_add(1)
+        .ok_or(PulseError::CounterOverflow)?;
+    if data.count > pulse_cap(env) {
+        return Err(PulseError::PulseCapReached);
+    }
+    data.last_caller = Some(caller.clone());
+    data.last_pulse_at = Some(env.ledger().timestamp());
+
+    // Store updated data
+    env.storage().instance().set(&PULSE_KEY, &data);
+
+    // Emit a pulse event with detailed topics for indexing
+    env.events()
+        .publish((TOPIC_PULSE, TOPIC_FIRED), (data.count, caller.clone()));
+
+    log!(env, "Pulse #{} fired by {}", data.count, caller);
+
+    Ok(data.count)
+}
+
+/// Effective minimum interval (seconds) for an address: its per-address
+/// override when set, otherwise the global default (issue #59). An override of
+/// 0 means "cleared" — fall through to the global default.
+fn effective_rate_limit(env: &Env, address: &Address) -> u64 {
+    env.storage()
+        .persistent()
+        .get::<(Symbol, Address), u64>(&(ADDRESS_RATE_LIMIT_KEY, address.clone()))
+        .filter(|limit| *limit > 0)
+        .or_else(|| {
+            env.storage()
+                .persistent()
+                .get::<Symbol, u64>(&DEFAULT_RATE_LIMIT_KEY)
+        })
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

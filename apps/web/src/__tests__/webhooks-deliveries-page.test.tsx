@@ -60,7 +60,14 @@ function deliveryEnvelope(items: unknown[]) {
 }
 
 async function renderWithWebhook() {
-  fetchMock.mockResolvedValue(envelope([apiWebhook()]));
+  // The webhook LIST wraps rows in `{ data, pagination }`; the per-webhook
+  // deliveries call unwraps that inner array directly.
+  fetchMock.mockResolvedValue(
+    envelope({
+      data: [apiWebhook()],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    }),
+  );
   vi.stubGlobal('fetch', fetchMock);
   render(<WebhooksPage />);
   await screen.findByText('https://example.com/hook');

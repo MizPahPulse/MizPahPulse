@@ -133,8 +133,9 @@ export default function WebhooksPage() {
     setLoading(true);
     setPageError(null);
     try {
-      const data = await apiFetch<ApiWebhook[]>('/api/v1/webhooks');
-      setWebhooks(data.map(mapWebhook));
+      // List endpoints wrap rows in `{ data, pagination }`; unwrap the array.
+      const data = await apiFetch<{ data: ApiWebhook[] }>('/api/v1/webhooks');
+      setWebhooks(data.data.map(mapWebhook));
     } catch (err) {
       setPageError(err instanceof Error ? err.message : 'Failed to load webhooks');
     } finally {
@@ -146,10 +147,10 @@ export default function WebhooksPage() {
     const controller = new AbortController();
     (async () => {
       try {
-        const data = await apiFetch<ApiWebhook[]>('/api/v1/webhooks', {
+        const data = await apiFetch<{ data: ApiWebhook[] }>('/api/v1/webhooks', {
           signal: controller.signal,
         });
-        if (!controller.signal.aborted) setWebhooks(data.map(mapWebhook));
+        if (!controller.signal.aborted) setWebhooks(data.data.map(mapWebhook));
       } catch (err) {
         if (!controller.signal.aborted) {
           setPageError(err instanceof Error ? err.message : 'Failed to load webhooks');
