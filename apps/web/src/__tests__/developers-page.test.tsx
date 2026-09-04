@@ -177,3 +177,86 @@ describe('DevelopersPage API keys (#18)', () => {
     expect(await screen.findByText('Production App')).toBeInTheDocument();
   });
 });
+
+describe('DevelopersPage API reference (#91)', () => {
+  it('switches to the API Reference tab and lists the documented endpoints', async () => {
+    fetchMock.mockResolvedValue(envelope([]));
+
+    renderPage();
+    await screen.findByText('No API keys yet');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'API Reference' }));
+
+    expect(await screen.findAllByText('/api/v1/events')).not.toHaveLength(0);
+    expect(screen.getByText('/api/v1/stats/timeseries')).toBeInTheDocument();
+    expect(screen.getAllByText('/api/v1/webhooks').length).toBeGreaterThan(0);
+    expect(screen.getByText('/api/v1/transactions/{hash}')).toBeInTheDocument();
+    expect(screen.getByText(/all endpoints under/)).toBeInTheDocument();
+  });
+
+  it('expands an endpoint to reveal params and the sample response', async () => {
+    fetchMock.mockResolvedValue(envelope([]));
+
+    renderPage();
+    await screen.findByText('No API keys yet');
+    fireEvent.click(screen.getByRole('tab', { name: 'API Reference' }));
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /List blockchain events with cursor pagination/ }),
+    );
+
+    expect(await screen.findByText('Parameters')).toBeInTheDocument();
+    expect(screen.getAllByText('limit').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('cursor').length).toBeGreaterThan(0);
+    expect(screen.getByText('Sample response')).toBeInTheDocument();
+    expect(screen.getByText(/"hasMore": false/)).toBeInTheDocument();
+  });
+
+  it('runs a try-it-out request for a GET endpoint and shows the response', async () => {
+    fetchMock.mockResolvedValueOnce(envelope([])); // initial keys list
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          success: true,
+          data: { events: [{ id: 'evt-1' }], total: 1, cursor: null, hasMore: false },
+        }),
+    });
+
+    renderPage();
+    await screen.findByText('No API keys yet');
+    fireEvent.click(screen.getByRole('tab', { name: 'API Reference' }));
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /List blockchain events with cursor pagination/ }),
+    );
+    fireEvent.change(await screen.findByLabelText('limit'), {
+      target: { value: '5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }));
+
+    expect(await screen.findByTestId('try-it-response')).toHaveTextContent('evt-1');
+    expect(screen.getByText('HTTP')).toBeInTheDocument();
+    expect(screen.getByText('200')).toBeInTheDocument();
+
+    const runCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).startsWith('/api/v1/events'),
+    );
+    expect(runCall).toBeTruthy();
+    expect(String(runCall![0])).toBe('/api/v1/events?limit=5');
+  });
+
+  it('shows an error when a required path parameter is missing', async () => {
+    fetchMock.mockResolvedValue(envelope([]));
+
+    renderPage();
+    await screen.findByText('No API keys yet');
+    fireEvent.click(screen.getByRole('tab', { name: 'API Reference' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /GET \/api\/v1\/transactions/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }));
+
+    expect(await screen.findByText('Path parameter "hash" is required')).toBeInTheDocument();
+  });
+});

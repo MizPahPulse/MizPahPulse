@@ -4,6 +4,7 @@ import { EventType } from '@mizpah-pulse/types';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
+import { requireApiKey } from '@/lib/api-key';
 import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
@@ -100,6 +101,12 @@ async function POSTHandler(request: Request) {
     keyPrefix: 'webhooks:create',
   });
   if (rateLimitResult.limited) return rateLimitResult.response!;
+
+  // Write endpoints validate API keys when presented (issue #28): invalid
+  // keys are rejected with 401; anonymous access stays enabled for the
+  // public demo unless REQUIRE_API_KEY=true.
+  const auth = await requireApiKey(request);
+  if (auth.response) return auth.response;
 
   try {
     const body = await request.json();

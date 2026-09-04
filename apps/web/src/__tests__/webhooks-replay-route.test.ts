@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   webhookDelivery: { findFirst: vi.fn(), update: vi.fn() },
+  apiKey: { findUnique: vi.fn(), update: vi.fn() },
 }));
 
 vi.mock('@mizpah-pulse/database', () => ({
@@ -41,10 +42,13 @@ function failedDelivery() {
   };
 }
 
-function replayRequest(id = 'wh-1', deliveryId = 'del-9') {
+function replayRequest(id = 'wh-1', deliveryId = 'del-9', key?: string) {
+  const headers: Record<string, string> = {};
+  if (key) headers.authorization = `Bearer ${key}`;
   return POST(
     new Request(`http://localhost:3000/api/v1/webhooks/${id}/deliveries/${deliveryId}/replay`, {
       method: 'POST',
+      headers,
     }),
     { params: Promise.resolve({ id, deliveryId }) },
   );
@@ -141,5 +145,15 @@ describe('POST /api/v1/webhooks/[id]/deliveries/[deliveryId]/replay', () => {
 
     const res = await replayRequest();
     expect(res.status).toBe(429);
+  });
+
+  it('rejects an invalid API key with 401 before touching the delivery (#28)', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValue(null);
+
+    const res = await replayRequest('wh-1', 'del-1', 'mp_live_bogusnotinanytable');
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(prismaMock.webhookDelivery.findFirst).not.toHaveBeenCalled();
   });
 });

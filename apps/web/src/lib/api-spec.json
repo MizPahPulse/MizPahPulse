@@ -1,0 +1,466 @@
+{
+  "version": "1.0",
+  "baseUrl": "https://mizpah-pulse.example.com/api/v1",
+  "auth": "Pass `Authorization: Bearer mp_live_...` (or `mp_test_...`) with every request. Keys are created in the API Keys tab.",
+  "endpoints": [
+    {
+      "tag": "Events",
+      "method": "GET",
+      "path": "/api/v1/events",
+      "summary": "List blockchain events with cursor pagination",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Max rows to return (1-100, default 50)"
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Opaque cursor from the previous page"
+        },
+        {
+          "name": "eventType",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by event type (PAYMENT, DEX_TRADE, ...)"
+        },
+        {
+          "name": "category",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by category (PAYMENT, CONTRACT, ...)"
+        },
+        {
+          "name": "accountId",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by involved account"
+        },
+        {
+          "name": "contractId",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by invoked contract"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"events\":[{\"id\":\"cm0abc\",\"eventType\":\"PAYMENT\",\"category\":\"PAYMENT\",\"source\":\"testnet\",\"severity\":\"INFO\",\"transactionHash\":\"a1b2c3...\",\"timestamp\":\"2026-09-04T10:00:00.000Z\",\"amount\":\"25.5\",\"payload\":{\"from\":\"GBX...\",\"to\":\"GAY...\"}}],\"total\":1,\"limit\":50,\"cursor\":null,\"hasMore\":false}}"
+    },
+    {
+      "tag": "Events",
+      "method": "GET",
+      "path": "/api/v1/events/live",
+      "summary": "Server-sent events stream of new events (SSE)",
+      "auth": "None (public demo stream)",
+      "params": [],
+      "sample": "\"event: event\\ndata: {\\\"id\\\":\\\"cm0abc\\\",\\\"eventType\\\":\\\"PAYMENT\\\"}\\n\\n\""
+    },
+    {
+      "tag": "Stats",
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "summary": "Dashboard statistics (totals, recent activity, top assets)",
+      "auth": "Optional",
+      "params": [],
+      "sample": "{\"success\":true,\"data\":{\"totalEvents\":128430,\"eventsToday\":312,\"totalTransactions\":98421,\"totalContracts\":17,\"activeWebhooks\":4,\"recentActivity\":[],\"topAssets\":[]}}"
+    },
+    {
+      "tag": "Stats",
+      "method": "GET",
+      "path": "/api/v1/stats/timeseries",
+      "summary": "Aggregated event volume over a time range",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "range",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Aggregation window: 24h, 7d, 30d (default 24h)"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"buckets\":[{\"start\":\"2026-09-04T00:00:00.000Z\",\"end\":\"2026-09-04T01:00:00.000Z\",\"total\":42,\"byCategory\":{\"PAYMENT\":38,\"CONTRACT\":4}}],\"total\":42,\"start\":\"2026-09-04T00:00:00.000Z\",\"end\":\"2026-09-04T23:59:59.000Z\"}}"
+    },
+    {
+      "tag": "Stats",
+      "method": "GET",
+      "path": "/api/v1/status",
+      "summary": "Service health: database, Horizon, and ingestion status",
+      "auth": "Optional",
+      "params": [],
+      "sample": "{\"success\":true,\"data\":{\"status\":\"healthy\",\"services\":{\"database\":\"up\",\"horizon\":\"up\",\"ingester\":\"running\"},\"uptimeSeconds\":86400}}"
+    },
+    {
+      "tag": "Assets",
+      "method": "GET",
+      "path": "/api/v1/assets",
+      "summary": "List tracked assets with pagination and search",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "page",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Page number (default 1)"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Page size (1-100, default 20)"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by code or issuer"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"assets\":[{\"code\":\"USDC\",\"issuer\":\"GBA...\",\"name\":\"USD Coin\",\"trustlines\":4821,\"volume\":\"104882.31\"}],\"total\":1,\"page\":1,\"limit\":20}}"
+    },
+    {
+      "tag": "Transactions",
+      "method": "GET",
+      "path": "/api/v1/transactions/{hash}",
+      "summary": "Fetch a transaction by hash (DB with Horizon fallback)",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "hash",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Transaction hash (64 hex chars)"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"hash\":\"a1b2c3...\",\"status\":\"successful\",\"sourceAccount\":\"GBX...\",\"ledgerSequence\":41230,\"createdAt\":\"2026-09-04T10:00:00.000Z\",\"resultXdr\":\"AAAAAAAA...\"}}"
+    },
+    {
+      "tag": "Accounts",
+      "method": "GET",
+      "path": "/api/v1/accounts/{id}/activity",
+      "summary": "Cursor-paginated activity feed for a Stellar account",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Stellar public key (G...)"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Max rows (1-100, default 50)"
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Opaque next-page cursor"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"accountId\":\"GBX...\",\"summary\":{\"totalTransactions\":128,\"payments\":99,\"contractInteractions\":29},\"events\":[],\"total\":128,\"limit\":50,\"cursor\":\"eyJ0cyI6...\",\"hasMore\":true}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "GET",
+      "path": "/api/v1/webhooks",
+      "summary": "List webhook subscriptions",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "page",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Page number (default 1)"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Page size (1-100, default 20)"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"webhooks\":[{\"id\":\"wh-1\",\"endpoint\":\"https://example.com/hook\",\"events\":[\"PAYMENT\"],\"isActive\":true,\"secretMasked\":\"whsec_••••••••••••\",\"createdAt\":\"2026-09-01T10:00:00.000Z\"}],\"total\":1,\"page\":1,\"limit\":20}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "POST",
+      "path": "/api/v1/webhooks",
+      "summary": "Create a webhook subscription",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "body",
+          "in": "body",
+          "type": "object",
+          "required": true,
+          "description": "{\"endpoint\": string, \"events\": string[]}"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"id\":\"wh-1\",\"endpoint\":\"https://example.com/hook\",\"events\":[\"PAYMENT\"],\"isActive\":true,\"secretMasked\":\"whsec_••••••••••••\"}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "PATCH",
+      "path": "/api/v1/webhooks/{id}",
+      "summary": "Update a webhook subscription (partial)",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Webhook id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"id\":\"wh-1\",\"endpoint\":\"https://example.com/hook\",\"events\":[\"PAYMENT\",\"DEX_TRADE\"],\"isActive\":true}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "DELETE",
+      "path": "/api/v1/webhooks/{id}",
+      "summary": "Delete a webhook subscription",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Webhook id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"deleted\":true,\"id\":\"wh-1\"}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "GET",
+      "path": "/api/v1/webhooks/{id}/deliveries",
+      "summary": "List delivery attempts for a webhook",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Webhook id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"deliveries\":[{\"id\":\"del-9\",\"status\":\"FAILED\",\"statusCode\":500,\"attempt\":3,\"error\":\"HTTP 500: Internal Server Error\"}],\"total\":1}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "POST",
+      "path": "/api/v1/webhooks/{id}/rotate-secret",
+      "summary": "Rotate the webhook signing secret",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Webhook id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"webhook\":{\"id\":\"wh-1\"},\"secret\":\"whsec_9f8e7d6c5b4a...\"}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "POST",
+      "path": "/api/v1/webhooks/{id}/deliveries/{deliveryId}/replay",
+      "summary": "Re-queue a FAILED delivery for retry",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Webhook id"
+        },
+        {
+          "name": "deliveryId",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Delivery id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"delivery\":{\"id\":\"del-9\",\"status\":\"PENDING\",\"attempt\":0},\"queued\":true}}"
+    },
+    {
+      "tag": "Webhooks",
+      "method": "POST",
+      "path": "/api/v1/webhooks/batch",
+      "summary": "Create multiple webhook subscriptions in one call",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "body",
+          "in": "body",
+          "type": "object",
+          "required": true,
+          "description": "{\"webhooks\": Array<{endpoint, events}>}"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"created\":[{\"id\":\"wh-1\",\"endpoint\":\"https://example.com/hook\"}],\"total\":1}}"
+    },
+    {
+      "tag": "Audit & Preferences",
+      "method": "GET",
+      "path": "/api/v1/audit-logs",
+      "summary": "Retrieve security-relevant audit log entries",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "limit",
+          "in": "query",
+          "type": "number",
+          "required": false,
+          "description": "Max rows (1-100, default 50)"
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Opaque next-page cursor"
+        },
+        {
+          "name": "action",
+          "in": "query",
+          "type": "string",
+          "required": false,
+          "description": "Filter by action (WEBHOOK_CREATED, ...)"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"logs\":[{\"id\":\"log-1\",\"action\":\"WEBHOOK_CREATED\",\"actorId\":\"default\",\"metadata\":{\"webhookId\":\"wh-1\"},\"createdAt\":\"2026-09-04T10:00:00.000Z\"}],\"total\":1,\"cursor\":null,\"hasMore\":false}}"
+    },
+    {
+      "tag": "Audit & Preferences",
+      "method": "GET",
+      "path": "/api/v1/preferences",
+      "summary": "Read notification preferences",
+      "auth": "Optional",
+      "params": [],
+      "sample": "{\"success\":true,\"data\":{\"email\":true,\"push\":false,\"channels\":[\"websocket\"]}}"
+    },
+    {
+      "tag": "Audit & Preferences",
+      "method": "PATCH",
+      "path": "/api/v1/preferences",
+      "summary": "Update notification preferences",
+      "auth": "Optional (validated when presented)",
+      "params": [
+        {
+          "name": "body",
+          "in": "body",
+          "type": "object",
+          "required": true,
+          "description": "Partial preference object"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"email\":true,\"push\":true,\"channels\":[\"websocket\",\"email\"]}}"
+    },
+    {
+      "tag": "API Keys",
+      "method": "GET",
+      "path": "/api/v1/api-keys",
+      "summary": "List API keys (masked — raw secrets never returned)",
+      "auth": "Optional",
+      "params": [],
+      "sample": "{\"success\":true,\"data\":[{\"id\":\"key-1\",\"name\":\"Production App\",\"network\":\"live\",\"permissions\":[\"read\",\"write\"],\"maskedKey\":\"mp_live_••••••••••••\"}]}"
+    },
+    {
+      "tag": "API Keys",
+      "method": "POST",
+      "path": "/api/v1/api-keys",
+      "summary": "Create an API key (secret returned exactly once)",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "body",
+          "in": "body",
+          "type": "object",
+          "required": true,
+          "description": "{\"name\": string, \"permissions\": [\"read\"|\"write\"], \"network\": \"live\"|\"test\"}"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"id\":\"key-1\",\"name\":\"Production App\",\"permissions\":[\"read\"],\"key\":\"mp_live_9f8e7d6c5b4a3c2d1e0f...\",\"maskedKey\":\"mp_live_••••••••••••\"}}"
+    },
+    {
+      "tag": "API Keys",
+      "method": "DELETE",
+      "path": "/api/v1/api-keys/{id}",
+      "summary": "Revoke an API key (soft delete)",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "API key id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"id\":\"key-1\",\"revoked\":true,\"revokedAt\":\"2026-09-04T10:00:00.000Z\"}}"
+    },
+    {
+      "tag": "Search & Contracts",
+      "method": "GET",
+      "path": "/api/v1/search",
+      "summary": "Search accounts, contracts, assets, and transactions",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "q",
+          "in": "query",
+          "type": "string",
+          "required": true,
+          "description": "Search query"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"accounts\":[],\"contracts\":[],\"assets\":[],\"transactions\":[]}}"
+    },
+    {
+      "tag": "Search & Contracts",
+      "method": "GET",
+      "path": "/api/v1/contracts/{id}/events",
+      "summary": "List events for a smart contract",
+      "auth": "Optional",
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true,
+          "description": "Contract id"
+        }
+      ],
+      "sample": "{\"success\":true,\"data\":{\"events\":[],\"total\":0}}"
+    }
+  ]
+}
