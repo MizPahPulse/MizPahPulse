@@ -38,3 +38,14 @@ Object.defineProperty(window, 'freighterApi', {
   writable: true,
   configurable: true,
 });
+
+// Recharts' ResponsiveContainer observes its parent with ResizeObserver, which
+// jsdom does not implement. A no-op stub keeps charts renderable in tests.
+if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (window as unknown as Record<string, unknown>).ResizeObserver = ResizeObserverStub;
+}

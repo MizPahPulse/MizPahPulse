@@ -5,9 +5,12 @@
  * verifies each stat card exposes an explanation tooltip on hover/focus.
  */
 import React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import DashboardPage from '@/app/dashboard/page';
+
+const ONBOARDING_STEPS_KEY = 'mp-onboarding-steps';
+const ONBOARDING_DISMISSED_KEY = 'mp-onboarding-dismissed';
 
 const fetchMock = vi.fn();
 
@@ -33,6 +36,7 @@ describe('DashboardPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   it('renders an explanation control on every stat card', async () => {
@@ -110,7 +114,12 @@ describe('DashboardPage', () => {
     expect(screen.getByText('74 events')).toBeInTheDocument();
     expect(screen.getByText('51 events')).toBeInTheDocument();
     expect(screen.getByText('29 events')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(5);
+    // Exactly the five account rows render (onboarding steps use the same
+    // list-item role, so scope to rows that carry event counts).
+    const accountRows = screen
+      .getAllByRole('listitem')
+      .filter((li) => within(li).queryByText(/\d+ events/));
+    expect(accountRows).toHaveLength(5);
   });
 
   it('copies a full account address from the top-accounts list', async () => {
@@ -142,10 +151,109 @@ describe('DashboardPage', () => {
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
+    // A returning user who dismissed onboarding: the checklist stays hidden so
+    // the widget is the only list on the page.
+    window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
 
     render(<DashboardPage />);
 
     expect(await screen.findByText(/No account activity recorded yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage onboarding checklist (#19)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    fetchMock.mockResolvedValue({ ok: true, json: async () => STATS_RESPONSE });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
+
+  it('renders the checklist with steps linking to the right pages', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Getting started' })).toBeInTheDocument();
+    expect(screen.getByText('0 of 4 steps complete')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'Connect your Freighter wallet' })).toHaveAttribute(
+      'href',
+      '/dashboard/wallets',
+    );
+    expect(screen.getByRole('link', { name: 'Watch a wallet' })).toHaveAttribute(
+      'href',
+      '/dashboard/wallets',
+    );
+    expect(screen.getByRole('link', { name: 'Create a webhook' })).toHaveAttribute(
+      'href',
+      '/dashboard/webhooks',
+    );
+    expect(screen.getByRole('link', { name: 'Invoke the Pulse contract' })).toHaveAttribute(
+      'href',
+      '/dashboard/contracts',
+    );
+  });
+
+  it('completing a step updates the progress and persists to localStorage', async () => {
+    render(<DashboardPage />);
+
+    const stepButton = await screen.findByRole('button', {
+      name: 'Mark Connect your Freighter wallet complete',
+    });
+    fireEvent.click(stepButton);
+
+    expect(await screen.findByText('1 of 4 steps complete')).toBeInTheDocument();
+    expect(stepButton).toHaveAttribute('aria-pressed', 'true');
+
+    // Toggling back off reverts the count.
+    fireEvent.click(stepButton);
+    expect(await screen.findByText('0 of 4 steps complete')).toBeInTheDocument();
+
+    // Completion is persisted for the next visit.
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Create a webhook complete' }));
+    await waitFor(() => {
+      const saved = JSON.parse(
+        window.localStorage.getItem(ONBOARDING_STEPS_KEY) ?? '[]',
+      ) as string[];
+      expect(saved).toEqual(['create-webhook']);
+    });
+  });
+
+  it('shows a completion state once every step is done', async () => {
+    render(<DashboardPage />);
+
+    const labels = [
+      'Connect your Freighter wallet',
+      'Watch a wallet',
+      'Create a webhook',
+      'Invoke the Pulse contract',
+    ];
+    for (const label of labels) {
+      fireEvent.click(await screen.findByRole('button', { name: `Mark ${label} complete` }));
+    }
+
+    expect(await screen.findByText(/You\u2019ve completed every step/i)).toBeInTheDocument();
+    expect(screen.getByText(/You\u2019re all set/i)).toBeInTheDocument();
+  });
+
+  it('dismiss hides the checklist permanently across visits', async () => {
+    render(<DashboardPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss getting started' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Getting started' })).not.toBeInTheDocument();
+    });
+    expect(window.localStorage.getItem(ONBOARDING_DISMISSED_KEY)).toBe('true');
+
+    // A fresh visit with the dismissed flag saved stays hidden.
+    render(<DashboardPage />);
+    expect(
+      await waitFor(() => screen.queryByRole('heading', { name: 'Getting started' })),
+    ).not.toBeInTheDocument();
   });
 });

@@ -21,6 +21,7 @@ vi.mock('@mizpah-pulse/database', () => ({
 
 import { GET } from '@/app/api/v1/events/live/route';
 import { parseLastEventId } from '@/lib/sse';
+import { closeAllSseStreams, activeSseClientCount } from '@/lib/sse-clients';
 
 const EVENT = {
   id: 'evt_new',
@@ -184,6 +185,29 @@ describe('GET /api/v1/events/live', () => {
 
     // Advancing time after cancellation must not throw or enqueue more data.
     await vi.advanceTimersByTimeAsync(5000);
+    const { done } = await reader.read();
+    expect(done).toBe(true);
+  });
+
+  it('delivers event: shutdown and ends the stream on server shutdown (#39)', async () => {
+    vi.useFakeTimers();
+    const res = await GET(new Request('http://localhost:3000/api/v1/events/live'), undefined);
+    const reader = res.body!.getReader();
+
+    await reader.read(); // connected event
+    expect(activeSseClientCount()).toBe(1);
+
+    // Simulate SIGTERM: the registry drains every open stream.
+    const closedCount = closeAllSseStreams('server_shutdown');
+    expect(closedCount).toBe(1);
+    expect(activeSseClientCount()).toBe(0);
+
+    const shutdownChunk = await reader.read();
+    const frame = new TextDecoder().decode(shutdownChunk.value);
+    expect(frame).toContain('event: shutdown');
+    expect(frame).toContain('"reason":"server_shutdown"');
+
+    // The stream is fully closed — no more frames arrive.
     const { done } = await reader.read();
     expect(done).toBe(true);
   });

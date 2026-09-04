@@ -10,6 +10,7 @@ import { formatCompactNumber } from '@/lib/format-number';
 import { MAX_EVENT_BUFFER } from '@/lib/constants';
 import { serializeEventsToCsv, eventsCsvFilename, downloadCsv } from '@/lib/csv-export';
 import { prefersReducedMotion } from '@/lib/reduced-motion';
+import { useVirtualList } from '@/lib/virtual-list';
 import {
   Activity,
   ArrowUpDown,
@@ -475,6 +476,13 @@ export default function FeedPage() {
 
   const sortedEvents = sortOrder === 'desc' ? filteredEvents : [...filteredEvents].reverse();
 
+  // Windowed rendering: only the visible slice of rows is in the DOM (#12).
+  const {
+    containerRef: feedScrollRef,
+    onScroll: onFeedScroll,
+    range: virtualRange,
+  } = useVirtualList({ itemCount: sortedEvents.length });
+
   // Export the currently filtered/sorted events as a CSV download (#15).
   const exportCsv = useCallback(() => {
     const rows = sortedEvents.map((event) => ({
@@ -650,9 +658,12 @@ export default function FeedPage() {
         {liveAnnouncement}
       </p>
 
-      {/* Event Feed */}
+      {/* Event Feed — virtualized so only the visible window of rows is in
+          the DOM (issue #12); auto-scroll still targets the end marker. */}
       <div
-        className="space-y-2"
+        ref={feedScrollRef}
+        onScroll={onFeedScroll}
+        className="relative h-[70vh] overflow-y-auto overscroll-contain pr-1"
         role="feed"
         aria-label="Blockchain event feed"
         aria-busy={!wsConnected}
@@ -674,94 +685,106 @@ export default function FeedPage() {
             />
           </Card>
         ) : (
-          sortedEvents.map((event, idx) => (
-            <article
-              key={event.id}
-              className="feed-item group flex items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition-all duration-200 hover:border-slate-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
-              style={{ animationDelay: `${idx * 30}ms` }}
-              role="article"
-              aria-label={`${event.type} event: ${event.title}`}
-            >
-              {/* Status dot */}
-              <span
-                className={cn(
-                  'h-3 w-3 flex-shrink-0 rounded-full ring-4 ring-opacity-20',
-                  statusDotColors[event.status],
-                  event.status === 'success' && 'ring-emerald-100 dark:ring-emerald-900',
-                  event.status === 'error' && 'ring-red-100 dark:ring-red-900',
-                  event.status === 'warning' && 'ring-amber-100 dark:ring-amber-900',
-                )}
-                aria-hidden="true"
-              />
+          <div style={{ height: virtualRange.totalHeight, position: 'relative' }}>
+            <div style={{ transform: `translateY(${virtualRange.startOffset}px)` }}>
+              {sortedEvents
+                .slice(virtualRange.startIndex, virtualRange.endIndex + 1)
+                .map((event, i) => {
+                  const idx = virtualRange.startIndex + i;
+                  return (
+                    <article
+                      key={event.id}
+                      className="feed-item group flex items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition-all duration-200 hover:border-slate-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+                      style={{ animationDelay: `${idx * 30}ms` }}
+                      role="article"
+                      aria-label={`${event.type} event: ${event.title}`}
+                    >
+                      {/* Status dot */}
+                      <span
+                        className={cn(
+                          'h-3 w-3 flex-shrink-0 rounded-full ring-4 ring-opacity-20',
+                          statusDotColors[event.status],
+                          event.status === 'success' && 'ring-emerald-100 dark:ring-emerald-900',
+                          event.status === 'error' && 'ring-red-100 dark:ring-red-900',
+                          event.status === 'warning' && 'ring-amber-100 dark:ring-amber-900',
+                        )}
+                        aria-hidden="true"
+                      />
 
-              {/* Content */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {event.title}
-                  </span>
-                  <Badge
-                    variant={
-                      (categoryVariantMap[event.category] || 'default') as
-                        | 'success'
-                        | 'info'
-                        | 'purple'
-                        | 'pink'
-                        | 'amber'
-                        | 'warning'
-                        | 'error'
-                        | 'default'
-                    }
-                  >
-                    {event.category}
-                  </Badge>
-                </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                  <span className="font-mono">{event.from}</span>
-                  {event.to && (
-                    <>
-                      <span aria-hidden="true">→</span>
-                      <span className="font-mono">{event.to}</span>
-                    </>
-                  )}
-                  {event.amount && (
-                    <>
-                      <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">
-                        •
-                      </span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {event.amount}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
+                      {/* Content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {event.title}
+                          </span>
+                          <Badge
+                            variant={
+                              (categoryVariantMap[event.category] || 'default') as
+                                | 'success'
+                                | 'info'
+                                | 'purple'
+                                | 'pink'
+                                | 'amber'
+                                | 'warning'
+                                | 'error'
+                                | 'default'
+                            }
+                          >
+                            {event.category}
+                          </Badge>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="font-mono">{event.from}</span>
+                          {event.to && (
+                            <>
+                              <span aria-hidden="true">→</span>
+                              <span className="font-mono">{event.to}</span>
+                            </>
+                          )}
+                          {event.amount && (
+                            <>
+                              <span
+                                className="text-slate-300 dark:text-slate-600"
+                                aria-hidden="true"
+                              >
+                                •
+                              </span>
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {event.amount}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
 
-              {/* Time */}
-              <div className="flex-shrink-0 text-right">
-                <time
-                  className="text-xs text-slate-400 dark:text-slate-500"
-                  dateTime={new Date(event.timestamp).toISOString()}
-                >
-                  {event.time}
-                </time>
-              </div>
+                      {/* Time */}
+                      <div className="flex-shrink-0 text-right">
+                        <time
+                          className="text-xs text-slate-400 dark:text-slate-500"
+                          dateTime={new Date(event.timestamp).toISOString()}
+                        >
+                          {event.time}
+                        </time>
+                      </div>
 
-              {/* Hover action: copy the raw event JSON */}
-              <button
-                onClick={() => void copyEvent(event)}
-                className="hidden rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-indigo-500 group-hover:block dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
-                aria-label={`Copy ${event.type} event JSON`}
-                title="Copy event JSON"
-              >
-                {copiedEventId === event.id ? (
-                  <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
-                ) : (
-                  <Zap className="h-4 w-4" aria-hidden="true" />
-                )}
-              </button>
-            </article>
-          ))
+                      {/* Hover action: copy the raw event JSON */}
+                      <button
+                        onClick={() => void copyEvent(event)}
+                        className="hidden rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-indigo-500 group-hover:block dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
+                        aria-label={`Copy ${event.type} event JSON`}
+                        title="Copy event JSON"
+                      >
+                        {copiedEventId === event.id ? (
+                          <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                        ) : (
+                          <Zap className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    </article>
+                  );
+                })}
+            </div>
+          </div>
         )}
         <div ref={feedEndRef} />
       </div>
