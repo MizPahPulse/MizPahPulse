@@ -140,6 +140,24 @@ async function main() {
     });
   }
 
+  // Create the parent Transaction rows first: the Event → Transaction
+  // foreign key requires each referenced hash to exist. Without this the
+  // seed fails with a P2003 constraint violation on every fresh database.
+  const transactions = events.map((event) => ({
+    hash: event.transactionHash,
+    sourceAccount: event.accountId ?? SAMPLE_ACCOUNTS[0],
+    fee: String(Math.floor(Math.random() * 500) + 100), // stroops
+    operationCount: Math.floor(Math.random() * 5) + 1,
+    successful: true,
+    ledgerSequence: event.ledgerSequence,
+    createdAt: event.timestamp,
+    envelopeXdr: null,
+    resultXdr: null,
+    signatures: JSON.stringify([]),
+  }));
+  await prisma.transaction.createMany({ data: transactions, skipDuplicates: true });
+  console.log(`  ✓ Created ${transactions.length} transactions`);
+
   for (const event of events) {
     await prisma.event.create({ data: event });
   }

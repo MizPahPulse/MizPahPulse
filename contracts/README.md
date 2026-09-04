@@ -28,6 +28,29 @@ The PulseContract is a Soroban smart contract that provides:
 | 4 | CounterOverflow | Arithmetic overflow in counter |
 | 5 | InvalidTargetContract | Target contract address is invalid |
 | 6 | BatchTooLarge | Batch size exceeds maximum allowed |
+| 7 | TimeLockNotReady | Time-locked operation attempted before its scheduled timestamp |
+| 8 | CooldownActive | Rate-limited operation attempted within the active cooldown window |
+
+### Event Topics
+
+Every state-changing operation publishes a contract event. Topics use a
+`(primary, secondary)` symbol namespace so the ingester and indexers can
+categorize events without decoding the payload:
+
+| Operation | Primary topic | Secondary topic | Data |
+|-----------|---------------|-----------------|------|
+| `initialize` | `contract` | `init` | version |
+| `pulse` | `pulse` | `fired` | (count, caller) |
+| `batch_pulse` | `pulse` | `batch` | (batch_size, count) |
+| `broadcast_pulse` | `receiver` | `broadcast` | (count, target_contract) |
+| `on_pulse_received` | `receiver` | `ack` | (pulse_count, origin_caller) |
+| `transfer_ownership` | `owner_chg` | `transfer` | (old_owner, new_owner) |
+| `set_signers` | `signers` | `updated` | (signer_count, threshold) |
+| `pause` | `paused` | — | () |
+| `unpause` | `unpaused` | — | () |
+| `upgrade_version` | `upgrade` | `applied` | (new_version, wasm_hash) |
+| `update_wasm` | `upgrade` | `wasm` | wasm_hash |
+| `kill` | `kill` | `applied` | () |
 
 ## Development
 
@@ -68,7 +91,22 @@ DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
 pulse/
   src/
     lib.rs      # Contract implementation
-    test.rs     # Unit tests (27+ tests)
+    test.rs     # Unit tests (48 tests incl. property + gas estimation)
     types.rs    # Shared type definitions
   Cargo.toml    # Dependencies
 ```
+
+### Public query endpoints
+
+| Endpoint | Returns |
+|----------|---------|
+| `owner()` | Current contract owner (or `None` before init) |
+| `get_meta()` | Full `ContractMeta` (owner, paused, version) |
+| `get_version()` | Current contract version (`0` before init) |
+| `get_version_record()` | Latest upgrade audit record |
+| `get_signers()` | `(signers, threshold)` multi-sig configuration |
+| `get_pulse_count()` | Total pulse count |
+| `get_pulse_data()` | Pulse count + last caller + last pulse timestamp |
+| `get_last_received()` | Last cross-contract pulse received |
+| `is_paused()` / `is_killed()` | Pause / kill switch state |
+| `estimate_pulse_cost()` | Read-only gas cost estimate (stroops) |

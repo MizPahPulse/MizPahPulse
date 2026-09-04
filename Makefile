@@ -48,9 +48,8 @@ docker-up: ## Start Postgres + Redis
 docker-down: ## Stop Postgres + Redis
 	npm run docker:down
 
-db-reset: ## Push the schema and re-seed (dev reset)
-	npm run db:push
-	npm run db:seed
+db-reset: ## Reset the database (migrate reset) and re-seed
+	npm run db:reset
 
 db-seed: ## Seed development data
 	npm run db:seed

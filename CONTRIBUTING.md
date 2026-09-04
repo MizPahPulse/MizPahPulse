@@ -70,6 +70,7 @@ Significant architecture decisions are recorded in
 | `npm run test` | Run all tests |
 | `npm run format` | Format code with Prettier |
 | `npm run db:seed` | Seed database with test data |
+| `npm run db:reset` | Reset the database (`prisma migrate reset`) and re-seed in one command |
 | `npm run db:studio` | Open Prisma Studio |
 
 ### Testing Contracts

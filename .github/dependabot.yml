@@ -1,0 +1,48 @@
+# Dependabot configuration (issue #80)
+#
+# - npm: workspace manifests + lockfile at the repo root
+# - cargo: Soroban smart-contract crates under /contracts
+#
+# Both ecosystems run on a weekly schedule. Patch and minor updates are
+# grouped into a single PR per ecosystem; a companion workflow
+# (.github/workflows/dependabot-auto-merge.yml) auto-approves and
+# auto-merges those grouped PRs when the repository's auto-merge setting
+# is enabled.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    groups:
+      npm-workspace-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  - package-ecosystem: "cargo"
+    directory: "/contracts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      cargo-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
