@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Providers } from './providers';
+import { THEME_BOOTSTRAP_SCRIPT } from '@/lib/theme';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,6 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-white dark:bg-slate-950">
+        {/* Apply the stored/system theme before first paint to avoid a flash
+            of the wrong theme (issue #6). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         <Providers>{children}</Providers>
       </body>
     </html>

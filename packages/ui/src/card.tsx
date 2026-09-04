@@ -7,6 +7,9 @@ export interface CardProps {
   hover?: boolean;
   onClick?: () => void;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  id?: string;
+  role?: string;
+  'aria-selected'?: boolean;
 }
 
 const paddingStyles: Record<NonNullable<CardProps['padding']>, string> = {
@@ -16,9 +19,19 @@ const paddingStyles: Record<NonNullable<CardProps['padding']>, string> = {
   lg: 'p-6',
 };
 
-export function Card({ children, className, hover, onClick, padding = 'md' }: CardProps) {
+export function Card({
+  children,
+  className,
+  hover,
+  onClick,
+  padding = 'md',
+  id,
+  role,
+  'aria-selected': ariaSelected,
+}: CardProps) {
   return (
     <div
+      id={id}
       className={cn(
         'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900',
         hover &&
@@ -27,7 +40,8 @@ export function Card({ children, className, hover, onClick, padding = 'md' }: Ca
         className,
       )}
       onClick={onClick}
-      role={onClick ? 'button' : undefined}
+      role={role ?? (onClick ? 'button' : undefined)}
+      aria-selected={ariaSelected}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
         onClick

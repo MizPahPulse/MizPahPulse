@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { cn } from './cn';
+import { useToast } from './toast';
 import { Copy, Check } from 'lucide-react';
 
 export interface CopyButtonProps {
@@ -12,11 +13,27 @@ export interface CopyButtonProps {
 
 export function CopyButton({ text, className, label }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
+  const { addToast } = useToast();
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      addToast({
+        type: 'success',
+        title: 'Copied to clipboard',
+        message: label ? `${label} copied` : undefined,
+        duration: 2000,
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      addToast({
+        type: 'error',
+        title: 'Copy failed',
+        message: 'Clipboard access was denied',
+        duration: 3000,
+      });
+    }
   };
 
   return (
