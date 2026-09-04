@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, cn, Skeleton } from '@mizpah-pulse/ui';
-import { Activity, ArrowLeftRight, FileCode, Send, TrendingUp, Wallet } from 'lucide-react';
+import { Card, CardContent, cn, Skeleton, Tooltip } from '@mizpah-pulse/ui';
+import { Activity, ArrowLeftRight, FileCode, Info, Send, TrendingUp, Wallet } from 'lucide-react';
 import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 import { apiFetch } from '@/lib/api-client';
@@ -125,24 +125,28 @@ export default function DashboardPage() {
       value: stats.eventsLast24h.toLocaleString(),
       icon: Activity,
       color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950',
+      tooltip: 'Events ingested and indexed in the last 24 hours.',
     },
     {
       label: 'Total Events',
       value: stats.totalEvents.toLocaleString(),
       icon: ArrowLeftRight,
       color: 'text-purple-500 bg-purple-50 dark:bg-purple-950',
+      tooltip: 'All events indexed by MizpahPulse since the indexer went live.',
     },
     {
       label: 'Tracked Contracts',
       value: stats.trackedContracts.toLocaleString(),
       icon: FileCode,
       color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950',
+      tooltip: 'Smart contracts referenced by at least one indexed event.',
     },
     {
       label: 'Unique Accounts',
       value: stats.uniqueAccounts.toLocaleString(),
       icon: Send,
       color: 'text-amber-500 bg-amber-50 dark:bg-amber-950',
+      tooltip: 'Distinct Stellar accounts observed in indexed events.',
     },
   ];
 
@@ -190,12 +194,23 @@ export default function DashboardPage() {
           <Card key={stat.label} padding="lg" hover>
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                  {stat.label}
-                </p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {stat.label}
+                  </p>
+                  <Tooltip content={stat.tooltip} position="top">
+                    <button
+                      type="button"
+                      aria-label={`About ${stat.label}`}
+                      className="rounded-full p-0.5 text-slate-300 transition-colors hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-600 dark:hover:text-slate-400"
+                    >
+                      <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                </div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                   {loading ? <Skeleton className="h-8 w-20" /> : stat.value}
-                </p>
+                </div>
                 <p className="text-xs font-medium text-slate-400">
                   {loading ? 'Loading…' : dataSource === 'live' ? 'Live from API' : 'Sample data'}
                 </p>

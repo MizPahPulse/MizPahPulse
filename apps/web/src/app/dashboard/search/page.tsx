@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, cn, EmptyState, Spinner, Badge } from '@mizpah-pulse/ui';
+import { Card, cn, EmptyState, Spinner, Skeleton, Badge } from '@mizpah-pulse/ui';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 import { Search, Hash, Wallet, FileCode, Coins } from 'lucide-react';
@@ -104,7 +104,7 @@ export default function SearchPage() {
           <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
             ⌘K
           </kbd>
-          {loading && (
+          {loading && results !== null && (
             <div className="absolute right-4 top-1/2 -translate-y-1/2">
               <Spinner size="sm" />
             </div>
@@ -129,7 +129,27 @@ export default function SearchPage() {
 
         {/* Results */}
         {query.length >= 2 && (
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-4" aria-busy={loading}>
+            {/* Skeleton rows shown while the first search is in flight */}
+            {loading && results === null && (
+              <div className="space-y-3" data-testid="search-results-skeleton" aria-hidden="true">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <Skeleton variant="circular" className="h-8 w-8" />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </div>
+                      <Skeleton className="h-3 w-64" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {error && (
               <Card
                 padding="md"

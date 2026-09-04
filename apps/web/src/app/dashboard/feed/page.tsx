@@ -8,7 +8,18 @@ import { formatTimeAgo } from '@/lib/date-utils';
 import { truncateAddress } from '@/lib/display-utils';
 import { formatCompactNumber } from '@/lib/format-number';
 import { MAX_EVENT_BUFFER } from '@/lib/constants';
-import { Activity, ArrowUpDown, Check, Filter, SlidersHorizontal, Zap, Radio } from 'lucide-react';
+import { prefersReducedMotion } from '@/lib/reduced-motion';
+import {
+  Activity,
+  ArrowUpDown,
+  Check,
+  Filter,
+  RefreshCw,
+  SlidersHorizontal,
+  X,
+  Zap,
+  Radio,
+} from 'lucide-react';
 import { useCallback } from 'react';
 
 /** Maximum number of events to keep in the buffer (from shared constants) */
@@ -215,7 +226,14 @@ function buildEventTitle(event: LiveEvent): string {
 }
 
 export default function FeedPage() {
-  const { isConnected: wsConnected, lastEvent, connectionStats } = useWebSocket({ enabled: true });
+  const {
+    isConnected: wsConnected,
+    everConnected,
+    lastEvent,
+    reconnect,
+  } = useWebSocket({
+    enabled: true,
+  });
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -226,6 +244,25 @@ export default function FeedPage() {
   const feedEndRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+  const [reconnectBannerDismissed, setReconnectBannerDismissed] = useState(false);
+
+  // Rate-limited screen-reader announcements: live arrivals are coalesced and
+  // announced as a single count after a short quiet window (see #24).
+  const [pendingAnnouncements, setPendingAnnouncements] = useState(0);
+  const [liveAnnouncement, setLiveAnnouncement] = useState<string | null>(null);
+  const announcementTimerRef = useRef<number | null>(null);
+
+  /** Append an event to the buffer and count it towards the next live announcement. */
+  const prependEvent = useCallback((event: FeedEvent) => {
+    setEvents((prev) => [event, ...prev].slice(0, MAX_EVENT_BUFFER));
+    setPendingAnnouncements((count) => count + 1);
+  }, []);
+
+  // Reset banner dismissal whenever the socket (re)connects so a future drop
+  // surfaces the banner again.
+  useEffect(() => {
+    if (wsConnected) setReconnectBannerDismissed(false);
+  }, [wsConnected]);
 
   // Restore previously persisted events once on mount (before any new events arrive).
   useEffect(() => {
@@ -245,6 +282,39 @@ export default function FeedPage() {
       // Storage full or unavailable — persistence is best-effort only.
     }
   }, [events]);
+
+  // Coalesce live arrivals into a single rate-limited polite announcement.
+  useEffect(() => {
+    if (pendingAnnouncements === 0 || isPaused) return;
+
+    if (announcementTimerRef.current !== null) {
+      window.clearTimeout(announcementTimerRef.current);
+    }
+    announcementTimerRef.current = window.setTimeout(() => {
+      announcementTimerRef.current = null;
+      const count = pendingAnnouncements;
+      setLiveAnnouncement(`${count} new event${count === 1 ? '' : 's'} added to the live feed`);
+      setPendingAnnouncements(0);
+    }, 1200);
+
+    return () => {
+      if (announcementTimerRef.current !== null) {
+        window.clearTimeout(announcementTimerRef.current);
+        announcementTimerRef.current = null;
+      }
+    };
+  }, [pendingAnnouncements, isPaused]);
+
+  // While the feed is paused, announcements are suppressed entirely: cancel any
+  // scheduled flush and drop counts that accumulated during the pause.
+  useEffect(() => {
+    if (announcementTimerRef.current !== null) {
+      window.clearTimeout(announcementTimerRef.current);
+      announcementTimerRef.current = null;
+    }
+    setPendingAnnouncements(0);
+    setLiveAnnouncement(null);
+  }, [isPaused]);
 
   const clearFeed = useCallback(() => {
     setEvents([]);
@@ -303,11 +373,8 @@ export default function FeedPage() {
       timestamp: Date.now(),
     };
 
-    setEvents((prev) => {
-      const updated = [feedEvent, ...prev];
-      return updated.slice(0, MAX_EVENT_BUFFER);
-    });
-  }, [lastEvent]);
+    prependEvent(feedEvent);
+  }, [lastEvent, prependEvent]);
 
   // Simulation mode: emit realistic sample events when no WebSocket is available
   useEffect(() => {
@@ -315,23 +382,18 @@ export default function FeedPage() {
     const interval = setInterval(() => {
       const template = SAMPLE_TEMPLATES[Math.floor(Math.random() * SAMPLE_TEMPLATES.length)];
       const account = SAMPLE_ACCOUNTS[Math.floor(Math.random() * SAMPLE_ACCOUNTS.length)];
-      setEvents((prev) =>
-        [
-          {
-            ...template,
-            id: `sim-${++idCounter.current}-${Date.now()}`,
-            from: template.from.startsWith('G')
-              ? truncateAddress(template.from)
-              : account.slice(0, 4) + '…' + account.slice(-3),
-            time: 'just now',
-            timestamp: Date.now(),
-          },
-          ...prev,
-        ].slice(0, MAX_EVENT_BUFFER),
-      );
+      prependEvent({
+        ...template,
+        id: `sim-${++idCounter.current}-${Date.now()}`,
+        from: template.from.startsWith('G')
+          ? truncateAddress(template.from)
+          : account.slice(0, 4) + '…' + account.slice(-3),
+        time: 'just now',
+        timestamp: Date.now(),
+      });
     }, 2_500);
     return () => clearInterval(interval);
-  }, [simulating]);
+  }, [simulating, prependEvent]);
 
   // Update relative timestamps every 10 seconds
   useEffect(() => {
@@ -346,10 +408,12 @@ export default function FeedPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom (smooth unless the user prefers reduced motion)
   useEffect(() => {
     if (autoScroll && !isPaused && feedEndRef.current) {
-      feedEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      feedEndRef.current.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     }
   }, [events, autoScroll, isPaused]);
 
@@ -437,6 +501,36 @@ export default function FeedPage() {
         </div>
       </div>
 
+      {/* Reconnecting banner — shown once a live connection drops */}
+      {!wsConnected && (everConnected || events.length > 0) && !reconnectBannerDismissed && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950"
+        >
+          <RefreshCw
+            className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <p className="min-w-0 flex-1 text-sm text-amber-800 dark:text-amber-300">
+            Connection to the live event stream was lost.{' '}
+            <span className="font-semibold">Reconnecting…</span>
+          </p>
+          <button
+            onClick={reconnect}
+            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-700 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-amber-950"
+          >
+            Retry now
+          </button>
+          <button
+            onClick={() => setReconnectBannerDismissed(true)}
+            className="rounded-lg p-1 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900"
+            aria-label="Dismiss reconnecting banner"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -482,6 +576,14 @@ export default function FeedPage() {
           {sortOrder === 'desc' ? 'Newest first' : 'Oldest first'}
         </button>
       </div>
+
+      {/* Screen-reader announcement region for live feed updates. The feed
+          itself is intentionally NOT aria-live (inserting every event would
+          flood assistive tech); arrivals are announced here as a single
+          rate-limited count instead. */}
+      <p aria-live="polite" role="status" className="sr-only">
+        {liveAnnouncement}
+      </p>
 
       {/* Event Feed */}
       <div
