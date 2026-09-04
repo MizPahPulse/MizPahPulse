@@ -17,10 +17,14 @@ const CreateWebhookSchema = z.object({
   userId: z.string().optional().default('default'),
 });
 
+const ListWebhooksQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  userId: z.string().optional().default('default'),
+});
+
 /**
  * Mask a signing secret so it can never be fully exposed through the API.
- * Secrets are only shown once at creation time in real webhook platforms;
- * here we return a stable placeholder so clients can detect that a secret exists.
  */
 function maskSecret(secret: string): string {
   const prefix = secret.startsWith('whsec_') ? 'whsec_' : '';
@@ -44,10 +48,9 @@ function sanitizeWebhook(w: {
 /**
  * GET /api/v1/webhooks
  *
- * List all registered webhooks.
+ * List all registered webhooks with pagination.
  */
 async function GET(request: Request) {
-  // Listing was previously unthrottled while the create endpoint was limited.
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
     windowMs: 60_000,
@@ -57,21 +60,57 @@ async function GET(request: Request) {
 
   const requestId = createRequestId();
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId') || 'default';
 
-  const webhooks = await prisma.webhookSubscription.findMany({
-    where: { userId },
-    include: { deliveries: { take: 5, orderBy: { createdAt: 'desc' } } },
+  const queryResult = ListWebhooksQuerySchema.safeParse({
+    page: searchParams.get('page'),
+    limit: searchParams.get('limit'),
+    userId: searchParams.get('userId'),
   });
 
-  return successResponse(
-    webhooks.map((w: { events: unknown; secret?: string | null; [key: string]: unknown }) =>
-      sanitizeWebhook({ ...w, events: JSON.parse(w.events as string) }),
-    ),
-    undefined,
-    undefined,
-    { 'X-Request-ID': requestId },
-  );
+  if (!queryResult.success) {
+    return errorResponse(
+      ErrorCode.VALIDATION_ERROR,
+      'Invalid query parameters',
+      queryResult.error.flatten() as unknown as Record<string, unknown>,
+    );
+  }
+
+  const { page, limit, userId } = queryResult.data;
+  const skip = (page - 1) * limit;
+
+  try {
+    const [webhooks, total] = await Promise.all([
+      prisma.webhookSubscription.findMany({
+        where: { userId },
+        include: { deliveries: { take: 5, orderBy: { createdAt: 'desc' } } },
+        orderBy: { createdAt: 'desc' }, // newest first
+        skip,
+        take: limit,
+      }),
+      prisma.webhookSubscription.count({ where: { userId } }),
+    ]);
+
+    return successResponse(
+      {
+        data: webhooks.map(
+          (w: { events: unknown; secret?: string | null; [key: string]: unknown }) =>
+            sanitizeWebhook({ ...w, events: JSON.parse(w.events as string) }),
+        ),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      undefined,
+      undefined,
+      { 'X-Request-ID': requestId },
+    );
+  } catch (error) {
+    console.error('[API] Webhook list error:', error);
+    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to retrieve webhooks');
+  }
 }
 
 /**
@@ -91,7 +130,6 @@ async function POST(request: Request) {
     const body = await request.json();
     const parsed = CreateWebhookSchema.parse(body);
 
-    // Validate the endpoint accepts HTTPS in production
     if (process.env.NODE_ENV === 'production' && !parsed.endpoint.startsWith('https://')) {
       return errorResponse(
         ErrorCode.VALIDATION_ERROR,
@@ -99,8 +137,6 @@ async function POST(request: Request) {
       );
     }
 
-    // SSRF guard: the ingester will POST to this endpoint, so it must not
-    // resolve to private/link-local/reserved addresses.
     if (process.env.NODE_ENV !== 'test') {
       const endpointCheck = await isPublicWebhookEndpoint(parsed.endpoint);
       if (!endpointCheck.ok) {
