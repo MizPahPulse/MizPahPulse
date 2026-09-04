@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { BalanceDisplay } from '@/components/BalanceDisplay';
+import { MonitoredWallets } from '@/components/monitored-wallets';
 import { TransactionModal } from '@/components/TransactionModal';
 import {
   Card,
@@ -266,6 +267,9 @@ export default function WalletsPage() {
           }
         />
       )}
+
+      {/* Tracked / monitored wallets with live balances (#5, #25, #49) */}
+      <MonitoredWallets />
 
       {/* Transaction Modal */}
       <TransactionModal isOpen={showSendModal} onClose={() => setShowSendModal(false)} />

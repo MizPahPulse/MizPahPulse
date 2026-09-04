@@ -175,6 +175,35 @@ npm run dev
 docker compose up -d
 ```
 
+### Docker without Redis (minimal profile, issue #75)
+
+Working on the UI/API only? Skip Redis (and the ws/ingester services that
+need it). The web app runs in its degraded fallback mode — in-memory rate
+limiting, no real-time WebSocket feed:
+
+```bash
+docker compose -f docker-compose.minimal.yml up -d
+# or, equivalently:
+docker compose -f docker-compose.minimal.yml --profile minimal up -d
+```
+
+This starts just **PostgreSQL + web**. Don't run the minimal and full stacks at
+the same time — they share ports and container names.
+
+### Mock API mode — no Docker at all (issue #100)
+
+No Postgres or Redis available? The web API can run against deterministic
+in-memory sample data with the same response shapes as the real endpoints:
+
+```bash
+npm install
+MOCK_API=1 npm run dev -w apps/web
+```
+
+Open http://localhost:3000 and browse the dashboard, feed, search, and
+webhooks pages with seeded demo data. See `.env.example` (and
+`packages/database/src/mock.ts`) for details.
+
 ---
 
 ## 📜 Smart Contract

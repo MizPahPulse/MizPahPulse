@@ -37,8 +37,16 @@ function apiWebhook(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+/** List endpoints wrap rows in `{ data, pagination }` (see route files). */
+function listEnvelope(items: unknown[]) {
+  return {
+    data: items,
+    pagination: { page: 1, limit: 20, total: items.length, totalPages: 1 },
+  };
+}
+
 async function renderLoaded() {
-  fetchMock.mockResolvedValue(envelope([]));
+  fetchMock.mockResolvedValue(envelope(listEnvelope([])));
   vi.stubGlobal('fetch', fetchMock);
   render(<WebhooksPage />);
   await screen.findByText('No webhooks configured');
@@ -92,7 +100,7 @@ describe('WebhooksPage form', () => {
 
   it('creates a webhook with a valid URL and adds a row to the list (#86)', async () => {
     fetchMock
-      .mockResolvedValueOnce(envelope([])) // initial list load
+      .mockResolvedValueOnce(envelope(listEnvelope([]))) // initial list load
       .mockResolvedValueOnce(envelope(apiWebhook()));
     vi.stubGlobal('fetch', fetchMock);
     render(<WebhooksPage />);
@@ -112,7 +120,7 @@ describe('WebhooksPage form', () => {
 
   it('deletes a webhook and removes its row from the list (#86)', async () => {
     fetchMock
-      .mockResolvedValueOnce(envelope([apiWebhook()])) // initial list load
+      .mockResolvedValueOnce(envelope(listEnvelope([apiWebhook()]))) // initial list load
       .mockResolvedValueOnce(envelope(null)); // DELETE response
     vi.stubGlobal('fetch', fetchMock);
     render(<WebhooksPage />);

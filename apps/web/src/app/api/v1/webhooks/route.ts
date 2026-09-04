@@ -39,9 +39,9 @@ async function GETHandler(request: Request) {
   const { searchParams } = new URL(request.url);
 
   const queryResult = ListWebhooksQuerySchema.safeParse({
-    page: searchParams.get('page'),
-    limit: searchParams.get('limit'),
-    userId: searchParams.get('userId'),
+    page: searchParams.get('page') ?? undefined,
+    limit: searchParams.get('limit') ?? undefined,
+    userId: searchParams.get('userId') ?? undefined,
   });
 
   if (!queryResult.success) {

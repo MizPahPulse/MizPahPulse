@@ -14,7 +14,7 @@ The PulseContract is a Soroban smart contract that provides:
 - **Kill Switch**: Permanent contract termination
 - **Batch Operations**: Gas-efficient batch pulse firing
 - **Cross-Contract Communication**: Broadcast pulses to other contracts
-- **Rate Limiting**: Cooldown-based rate-limited pulse with configurable window
+- **Rate Limiting**: Cooldown-based rate-limited pulse with a global default and configurable per-address overrides
 - **Time-Locked Ops**: Execute operations after a specific ledger timestamp, with an optional absolute deadline (not-after)
 - **Pulse Counter Cap**: Owner-configurable maximum pulse count to bound storage growth
 - **Gas Estimation**: Read-only gas cost estimation
@@ -55,6 +55,8 @@ categorize events without decoding the payload:
 | `update_wasm` | `upgrade` | `wasm` | wasm_hash |
 | `kill` | `kill` | `applied` | () |
 | `set_max_pulse_count` | `config` | `cap` | max_count |
+| `set_default_rate_limit` | `config` | `rate_def` | min_interval_seconds |
+| `set_address_rate_limit` | `config` | `rate_addr` | (address, min_interval_seconds) |
 
 ## Development
 
@@ -138,8 +140,38 @@ pulse/
 | `get_pulse_count()` | Total pulse count |
 | `get_pulse_data()` | Pulse count + last caller + last pulse timestamp |
 | `get_last_received()` | Last cross-contract pulse received |
+| `get_default_rate_limit()` | Default per-address pulse interval in seconds (`0` = disabled) |
+| `get_address_rate_limit(addr)` | Per-address override for `addr` (`0` = none) |
+| `get_effective_rate_limit(addr)` | Override if set, otherwise the global default |
 | `is_paused()` / `is_killed()` | Pause / kill switch state |
 | `estimate_pulse_cost()` | Read-only gas cost estimate (stroops) |
+
+### Per-address rate limits (issue #59)
+
+High-volume callers can be throttled per address instead of relying on the
+single global cooldown of `rate_limited_pulse`. The owner configures a
+default minimum interval, then optionally overrides it for individual
+addresses. An address with no override automatically falls back to the global
+default.
+
+- `set_default_rate_limit(min_interval_seconds)` — owner-only; `0` disables.
+- `set_address_rate_limit(address, min_interval_seconds)` — owner-only;
+  `0` clears the override so the address falls back to the default.
+- `pulse_from(address, caller)` — address-bound pulse that requires the
+  `address` to authorize and enforces the effective interval per address
+  before incrementing the shared counter. Without any configured limit it
+  behaves exactly like `pulse()`. A pulse inside the cooldown window fails
+  with `CooldownActive`.
+
+```text
+// Owner configures a 60s default and a 10s override for a hot wallet.
+client.set_default_rate_limit(&60);          // 1 pulse / minute by default
+client.set_address_rate_limit(&hot_wallet, &10);
+
+// Address-bound pulsing honors the effective limit.
+client.pulse_from(&hot_wallet, &symbol_short!("alice"));   // ok
+client.pulse_from(&hot_wallet, &symbol_short!("alice"));   // CooldownActive
+```
 
 ## End-to-End Deployment & Interaction Guide
 

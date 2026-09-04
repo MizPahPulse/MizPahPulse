@@ -1335,3 +1335,193 @@ proptest! {
         prop_assert_eq!(client.get_pulse_count(), expected_count);
     }
 }
+
+// ──────────────────────────────────────────────
+// Per-Address Rate Limits (issue #59)
+// ──────────────────────────────────────────────
+
+fn fresh_address(env: &Env) -> Address {
+    // Register a dummy contract to get a distinct, valid Address.
+    env.register_contract(None, PulseContract)
+}
+
+#[test]
+fn test_no_rate_limit_configured_by_default() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    assert_eq!(client.get_default_rate_limit(), 0u64);
+    assert_eq!(client.get_effective_rate_limit(&owner), 0u64);
+}
+
+#[test]
+fn test_set_default_rate_limit_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // No mock_all_auths: only the owner may configure limits.
+    let result = client.try_set_default_rate_limit(&60u64);
+    assert!(result.is_err(), "non-owner must not set the default rate limit");
+}
+
+#[test]
+fn test_set_address_rate_limit_owner_only() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let attacker = fresh_address(&env);
+    // No mock_all_auths → owner.require_auth() cannot be satisfied.
+    let result = client.try_set_address_rate_limit(&attacker, &30u64);
+    assert!(result.is_err(), "non-owner must not set per-address limits");
+}
+
+#[test]
+fn test_set_default_and_address_limits_as_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.set_default_rate_limit(&60u64);
+    client.set_address_rate_limit(&owner, &30u64);
+
+    assert_eq!(client.get_default_rate_limit(), 60u64);
+    assert_eq!(client.get_address_rate_limit(&owner), 30u64);
+}
+
+#[test]
+fn test_default_rate_limit_enforced_across_addresses() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.set_default_rate_limit(&60u64);
+    assert_eq!(client.get_default_rate_limit(), 60u64);
+
+    let addr_a = fresh_address(&env);
+    let addr_b = fresh_address(&env);
+
+    env.ledger().set_timestamp(1_000_000);
+    // First pulse from A succeeds.
+    assert_eq!(client.pulse_from(&addr_a, &symbol_short!("alice")), 1u32);
+
+    // A second pulse from A within the window is rejected.
+    let result = client.try_pulse_from(&addr_a, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::CooldownActive));
+
+    // A different address is not throttled by A's history.
+    assert_eq!(client.pulse_from(&addr_b, &symbol_short!("bob")), 2u32);
+
+    // After the window elapses A may pulse again.
+    env.ledger().set_timestamp(1_000_060);
+    assert_eq!(client.pulse_from(&addr_a, &symbol_short!("alice")), 3u32);
+}
+
+#[test]
+fn test_address_override_takes_precedence_over_default() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    // Global default: 100s between pulses.
+    client.set_default_rate_limit(&100u64);
+    // A gets a tighter (10s) override; B keeps the default.
+    let addr_a = fresh_address(&env);
+    let addr_b = fresh_address(&env);
+    client.set_address_rate_limit(&addr_a, &10u64);
+
+    assert_eq!(client.get_address_rate_limit(&addr_a), 10u64);
+    assert_eq!(client.get_effective_rate_limit(&addr_a), 10u64);
+    assert_eq!(client.get_address_rate_limit(&addr_b), 0u64);
+    // B falls back to the global default.
+    assert_eq!(client.get_effective_rate_limit(&addr_b), 100u64);
+
+    env.ledger().set_timestamp(1_000_000);
+    assert_eq!(client.pulse_from(&addr_a, &symbol_short!("alice")), 1u32);
+    assert_eq!(client.pulse_from(&addr_b, &symbol_short!("bob")), 2u32);
+
+    // +20s: A's 10s override has elapsed, B's 100s default has not.
+    env.ledger().set_timestamp(1_000_020);
+    assert_eq!(client.pulse_from(&addr_a, &symbol_short!("alice")), 3u32);
+    let result = client.try_pulse_from(&addr_b, &symbol_short!("bob"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::CooldownActive));
+}
+
+#[test]
+fn test_clearing_override_falls_back_to_default() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.set_default_rate_limit(&100u64);
+    let addr = fresh_address(&env);
+    client.set_address_rate_limit(&addr, &10u64);
+
+    env.ledger().set_timestamp(1_000_000);
+    assert_eq!(client.pulse_from(&addr, &symbol_short!("alice")), 1u32);
+
+    // +20s would be allowed under the 10s override…
+    env.ledger().set_timestamp(1_000_020);
+    assert_eq!(client.pulse_from(&addr, &symbol_short!("alice")), 2u32);
+
+    // Clear the override → the 100s default applies again.
+    client.set_address_rate_limit(&addr, &0u64);
+    assert_eq!(client.get_address_rate_limit(&addr), 0u64);
+    assert_eq!(client.get_effective_rate_limit(&addr), 100u64);
+
+    // +1s after the last pulse is inside the fallback window.
+    env.ledger().set_timestamp(1_000_021);
+    let result = client.try_pulse_from(&addr, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::CooldownActive));
+
+    // Once the default window elapses (from the last pulse at 1_000_020) the
+    // address can pulse again.
+    env.ledger().set_timestamp(1_000_120);
+    assert_eq!(client.pulse_from(&addr, &symbol_short!("alice")), 3u32);
+}
+
+#[test]
+fn test_pulse_from_pauses_with_contract() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.set_default_rate_limit(&10u64);
+    client.pause();
+
+    let addr = fresh_address(&env);
+    let result = client.try_pulse_from(&addr, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::ContractPaused));
+}
+
+#[test]
+fn test_rate_limit_events_emitted() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.set_default_rate_limit(&60u64);
+    client.set_address_rate_limit(&owner, &30u64);
+
+    let pairs = emitted_topic_pairs(&env);
+    assert!(
+        pairs.iter().any(|(t0, t1)| {
+            t0 == &symbol_short!("config") && t1 == &Some(symbol_short!("rate_def"))
+        }),
+        "set_default_rate_limit must emit a config/rate_def event, got {pairs:?}"
+    );
+    assert!(
+        pairs.iter().any(|(t0, t1)| {
+            t0 == &symbol_short!("config") && t1 == &Some(symbol_short!("rate_addr"))
+        }),
+        "set_address_rate_limit must emit a config/rate_addr event, got {pairs:?}"
+    );
+}

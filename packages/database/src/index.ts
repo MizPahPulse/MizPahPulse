@@ -1,7 +1,10 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { createMockPrisma, isMockApiEnabled } from './mock';
+
+type RealPrisma = ReturnType<typeof createPrismaClient>;
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined;
+  prisma: RealPrisma | undefined;
 };
 
 function createPrismaClient() {
@@ -55,9 +58,23 @@ function createPrismaClient() {
   return base.$extends(auditExtension);
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+/**
+ * Resolve the prisma client used by the API (issue #100).
+ *
+ * When MOCK_API=1 (or `true`) the app runs without Postgres/Redis: an
+ * in-memory client serves sample data with the same response shapes as the
+ * real client, so routes need zero code changes.
+ */
+function resolveClient(): RealPrisma {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+  const client = isMockApiEnabled()
+    ? (createMockPrisma() as unknown as RealPrisma)
+    : createPrismaClient();
+  if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = client;
+  return client;
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const prisma = resolveClient();
 
 export default prisma;
 

@@ -58,6 +58,7 @@ contracts/target/
 
 # Test artifacts
 test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Playwright

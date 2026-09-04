@@ -135,6 +135,28 @@ in the summary, reference the issues you close (`Closes #<number>`, one per
 line), list your changes, and tick the verification checklist. A PR that does
 not close an issue should say why the work is needed anyway.
 
+### Preview deployments (issue #78)
+
+Pull requests are deployed automatically to a **Vercel preview** URL by
+[`.github/workflows/preview-deploy.yml`](.github/workflows/preview-deploy.yml)
+— the bot comments the link on the PR so reviewers can try the running app.
+
+The workflow uses the monorepo settings in [`vercel.json`](vercel.json) and
+triggers on every push to a PR against `main`.
+
+**One-time repository setup (maintainers only):**
+
+1. Import/link the repository as a Vercel project (framework preset: Next.js;
+   root directory: repository root).
+2. Add three repository secrets so the workflow can deploy:
+   - `VERCEL_TOKEN` — a Vercel access token (Account → Settings → Tokens)
+   - `VERCEL_ORG_ID` — your Vercel team/org id (`vercel whoami` → `vercel link`)
+   - `VERCEL_PROJECT_ID` — the linked project id
+
+The workflow automatically skips (instead of failing) while those secrets are
+missing, so contributor PRs are unaffected until the maintainer configures
+Vercel.
+
 ### Makefile
 
 A [`Makefile`](Makefile) centralizes the most common developer commands. On
