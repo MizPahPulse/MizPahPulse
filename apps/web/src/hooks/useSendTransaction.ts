@@ -11,6 +11,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
+import { useToast } from '@mizpah-pulse/ui';
 import { getNetworkConfig, getExplorerTxUrl, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
@@ -42,6 +43,7 @@ export interface TransactionResult {
  */
 export function useSendTransaction() {
   const { publicKey, isConnected } = useWallet();
+  const { addToast } = useToast();
   const [state, setState] = useState<SendTransactionState>('idle');
   const [result, setResult] = useState<TransactionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +155,14 @@ export function useSendTransaction() {
 
         setResult(txResult);
         setState('success');
+        addToast({
+          type: 'success',
+          title: 'Transaction sent',
+          message: `${txResult.hash.slice(0, 12)}… confirmed on ledger ${txResult.ledger}`,
+          href: txResult.explorerUrl,
+          actionLabel: 'View on explorer',
+          duration: 8000,
+        });
         return txResult;
       } catch (err) {
         let message = err instanceof Error ? err.message : 'Transaction failed';
@@ -172,10 +182,16 @@ export function useSendTransaction() {
 
         setError(message);
         setState('error');
+        addToast({
+          type: 'error',
+          title: 'Transaction failed',
+          message,
+          duration: 8000,
+        });
         return null;
       }
     },
-    [publicKey, isConnected, networkConfig],
+    [publicKey, isConnected, networkConfig, addToast],
   );
 
   /**

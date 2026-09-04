@@ -1,13 +1,18 @@
 /**
- * Integration tests for contract invocation hook
+ * Integration tests for contract invocation hook (issue #20: toast outcomes).
  *
  * Tests cover:
- * 1. Validation: wallet not connected
+ * 1. Validation: wallet not connected (+ error toast emission)
  * 2. Validation: invalid contract ID
- * 3. Validation: empty function args
+ * 3. Initial idle state
+ *
+ * renderHook is wrapped in the real ToastProvider because useContractInvoke
+ * now emits outcome toasts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, screen } from '@testing-library/react';
+import React from 'react';
+import { ToastProvider } from '@mizpah-pulse/ui';
 import { useContractInvoke } from '@/hooks/useContractInvoke';
 
 vi.mock('@/context/WalletContext', () => ({
@@ -19,7 +24,7 @@ vi.mock('@stellar/stellar-sdk', () => ({
   TransactionBuilder: vi.fn(),
   BASE_FEE: '100',
   Server: vi.fn(),
-  SorobanRpc: {
+  rpc: {
     Server: vi.fn(),
     assembleTransaction: vi.fn(),
     Api: { isSimulationError: vi.fn() },
@@ -31,12 +36,16 @@ vi.mock('@stellar/stellar-sdk', () => ({
 }));
 
 vi.mock('@stellar/freighter-api', () => ({
-  default: { signTransaction: vi.fn() },
+  signTransaction: vi.fn(),
 }));
 
 import { useWallet } from '@/context/WalletContext';
 
 const TEST_CONTRACT_ID = 'CA7GXYZ1234567890ABCDEFGHIJKLMNOPQRSTUVWXY';
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return <ToastProvider>{children}</ToastProvider>;
+}
 
 describe('useContractInvoke', () => {
   beforeEach(() => {
@@ -49,7 +58,7 @@ describe('useContractInvoke', () => {
       isConnected: false,
     });
 
-    const { result } = renderHook(() => useContractInvoke(TEST_CONTRACT_ID));
+    const { result } = renderHook(() => useContractInvoke(TEST_CONTRACT_ID), { wrapper });
 
     await act(async () => {
       const invokeResult = await result.current.invoke('pulse', ['alice']);
@@ -67,7 +76,7 @@ describe('useContractInvoke', () => {
       isConnected: true,
     });
 
-    const { result } = renderHook(() => useContractInvoke('invalid-contract-id'));
+    const { result } = renderHook(() => useContractInvoke('invalid-contract-id'), { wrapper });
 
     await act(async () => {
       const invokeResult = await result.current.invoke('pulse', ['alice']);
@@ -84,11 +93,27 @@ describe('useContractInvoke', () => {
       isConnected: true,
     });
 
-    const { result } = renderHook(() => useContractInvoke(TEST_CONTRACT_ID));
+    const { result } = renderHook(() => useContractInvoke(TEST_CONTRACT_ID), { wrapper });
 
     expect(result.current.state).toBe('idle');
     expect(result.current.result).toBeNull();
     expect(result.current.error).toBeNull();
     expect(result.current.isInvoking).toBe(false);
+  });
+
+  it('emits an error toast when the invocation fails (#20)', async () => {
+    (useWallet as any).mockReturnValue({
+      publicKey: null,
+      isConnected: false,
+    });
+
+    const { result } = renderHook(() => useContractInvoke(TEST_CONTRACT_ID), { wrapper });
+
+    await act(async () => {
+      await result.current.invoke('pulse', ['alice']);
+    });
+
+    expect(screen.getByText('Contract invocation failed')).toBeInTheDocument();
+    expect(screen.getByText(/WALLET_NOT_CONNECTED/)).toBeInTheDocument();
   });
 });

@@ -37,6 +37,11 @@ export function useInfiniteScroll({
 
     if (!hasMore || isLoading) return;
 
+    // IntersectionObserver is unavailable in some environments (e.g. jsdom,
+    // very old browsers). Fall back to the caller's explicit trigger (e.g. a
+    // "Load more" button) rather than crashing.
+    if (typeof IntersectionObserver === 'undefined') return;
+
     observerRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && hasMore && !isLoading) {

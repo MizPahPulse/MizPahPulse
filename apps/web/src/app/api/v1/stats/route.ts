@@ -4,6 +4,7 @@ import { successResponse, errorResponse, ErrorCode } from '@/lib/api-errors';
 import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
 import { requireApiKey } from '@/lib/api-key';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ const CACHE_TTL = 30_000; // 30 seconds
  *
  * Aggregated dashboard statistics with caching.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   // Validate API keys when presented (and require them when configured).
   const auth = await requireApiKey(request);
   if (auth.response) return auth.response;
@@ -85,8 +86,11 @@ export async function GET(request: Request) {
 
     return successResponse(stats, 200, { cached: false });
   } catch (error) {
-    logger.error('[API] Stats error:', error);
+    const requestId = request.headers.get('X-Request-ID') ?? 'n/a';
+    logger.error(`[API] Stats error (requestId=${requestId}):`, error);
     recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch statistics');
   }
 }
+
+export const GET = withRequestId(GETHandler);

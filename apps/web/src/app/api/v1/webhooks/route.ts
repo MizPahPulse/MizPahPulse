@@ -8,6 +8,7 @@ import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
 import { maskSecret, sanitizeWebhook } from '@/lib/webhook-utils';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,15 +31,15 @@ const ListWebhooksQuerySchema = z.object({
  *
  * List all registered webhooks with pagination.
  */
-async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
     windowMs: 60_000,
     keyPrefix: 'webhooks:list',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
-  const requestId = createRequestId();
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
   const { searchParams } = new URL(request.url);
 
   const queryResult = ListWebhooksQuerySchema.safeParse({
@@ -85,7 +86,7 @@ async function GET(request: Request) {
       },
       undefined,
       undefined,
-      { 'X-Request-ID': requestId },
+      { 'X-Request-ID': requestId, ...rateLimitResult.headers },
     );
   } catch (error) {
     return prismaErrorResponse(error, 'Failed to retrieve webhooks', requestId);
@@ -97,13 +98,13 @@ async function GET(request: Request) {
  *
  * Register a new webhook endpoint.
  */
-async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 10,
     windowMs: 60_000,
     keyPrefix: 'webhooks:create',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
   try {
     const body = await request.json();
@@ -141,6 +142,8 @@ async function POST(request: Request) {
         events: JSON.parse(webhook.events as string),
       }),
       201,
+      undefined,
+      rateLimitResult.headers,
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -154,4 +157,5 @@ async function POST(request: Request) {
   }
 }
 
-export { GET, POST };
+export const GET = withRequestId(GETHandler);
+export const POST = withRequestId(POSTHandler);

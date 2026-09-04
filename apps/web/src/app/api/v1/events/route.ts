@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
 import { requireApiKey } from '@/lib/api-key';
 import { z } from 'zod';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,20 +41,20 @@ type EventQuery = z.infer<typeof EventQuerySchema>;
  *
  * Query processed blockchain events with filtering, pagination, and sorting.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   // Apply rate limiting: 60 requests per minute per IP
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 60,
     windowMs: 60_000,
     keyPrefix: 'events',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
   // Validate API keys when presented (and require them when configured).
   const auth = await requireApiKey(request);
   if (auth.response) return auth.response;
 
-  const requestId = createRequestId();
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
 
   try {
     const { searchParams } = new URL(request.url);
@@ -136,7 +137,7 @@ export async function GET(request: Request) {
       },
       undefined,
       undefined,
-      { 'X-Request-ID': requestId },
+      { 'X-Request-ID': requestId, ...rateLimitResult.headers },
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -148,8 +149,10 @@ export async function GET(request: Request) {
         requestId,
       );
     }
-    logger.error('[API] Events error:', error);
+    logger.error(`[API] Events error (requestId=${requestId}):`, error);
     recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch events', undefined, requestId);
   }
 }
+
+export const GET = withRequestId(GETHandler);

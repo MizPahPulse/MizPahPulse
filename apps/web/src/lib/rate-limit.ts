@@ -146,40 +146,73 @@ function resolveIdentifier(request: Request, keyPrefix: string): string {
   return `${keyPrefix}:${ip}:${url.pathname}`;
 }
 
+export interface RateLimitResult {
+  /** Whether this request exceeds the configured limit. */
+  limited: boolean;
+  /**
+   * Standard rate-limit headers describing THIS request's consumption:
+   * `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`.
+   * Routes attach them to every response (success and 429 alike) so clients
+   * can observe remaining capacity and back off gracefully (issue #29).
+   */
+  headers: Record<string, string>;
+  /** The 429 error response when `limited` is true, otherwise null. */
+  response: NextResponse | null;
+}
+
+function buildRateLimitHeaders(
+  maxRequests: number,
+  count: number,
+  resetAt: number,
+): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(maxRequests),
+    'X-RateLimit-Remaining': String(Math.max(0, maxRequests - count)),
+    'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)),
+  };
+}
+
 /**
  * Sliding-window rate limiter (Redis-backed with in-memory fallback).
- * Returns null if the request is allowed, or a 429 error response if rate limited.
+ *
+ * Returns the limit decision plus the standard `X-RateLimit-*` headers for the
+ * current request. `response` carries the 429 when `limited` is true; routes
+ * attach `headers` to their success responses so the headers are present on
+ * every response (issue #29).
  */
 export async function rateLimit(
   request: Request,
   options: RateLimitOptions = {},
-): Promise<NextResponse | null> {
+): Promise<RateLimitResult> {
   const { maxRequests = 100, windowMs = 60_000, keyPrefix = 'global' } = options;
 
   const identifier = resolveIdentifier(request, keyPrefix);
-  const { limited, resetAt } = await checkRedisLimit(identifier, maxRequests, windowMs);
+  const { limited, count, resetAt } = await checkRedisLimit(identifier, maxRequests, windowMs);
+  const headers = buildRateLimitHeaders(maxRequests, count, resetAt);
 
   if (limited) {
     const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
-    return errorResponse(
-      ErrorCode.RATE_LIMITED,
-      `Rate limit exceeded. Try again in ${retryAfter}s.`,
-      {
-        maxRequests,
-        windowMs,
-        retryAfterSeconds: retryAfter,
-      },
-      undefined,
-      {
-        'X-RateLimit-Limit': String(maxRequests),
-        'X-RateLimit-Remaining': '0',
-        'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)),
-        'Retry-After': String(Math.max(1, retryAfter)),
-      },
-    );
+    return {
+      limited: true,
+      headers,
+      response: errorResponse(
+        ErrorCode.RATE_LIMITED,
+        `Rate limit exceeded. Try again in ${retryAfter}s.`,
+        {
+          maxRequests,
+          windowMs,
+          retryAfterSeconds: retryAfter,
+        },
+        undefined,
+        {
+          ...headers,
+          'Retry-After': String(Math.max(1, retryAfter)),
+        },
+      ),
+    };
   }
 
-  return null;
+  return { limited: false, headers, response: null };
 }
 
 /**

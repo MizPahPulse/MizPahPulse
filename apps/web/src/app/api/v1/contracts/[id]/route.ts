@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { isValidContractId } from '@mizpah-pulse/stellar';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * Fetch Soroban smart contract details and recent invocations.
  */
-export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+async function GETHandler(request: Request, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
 
   if (!isValidContractId(id)) {
@@ -72,3 +73,5 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     );
   }
 }
+
+export const GET = withRequestId(GETHandler);

@@ -69,6 +69,7 @@ describe('GET /api/v1/events/live', () => {
       new Request('http://localhost:3000/api/v1/events/live', {
         headers: { 'Last-Event-ID': 'evt_prev' },
       }),
+      undefined,
     );
     const reader = res.body!.getReader();
 
@@ -103,7 +104,7 @@ describe('GET /api/v1/events/live', () => {
     vi.useFakeTimers();
     prismaMock.event.findMany.mockResolvedValue([EVENT]);
 
-    const res = await GET(new Request('http://localhost:3000/api/v1/events/live'));
+    const res = await GET(new Request('http://localhost:3000/api/v1/events/live'), undefined);
     const reader = res.body!.getReader();
     await reader.read(); // connected event
 
@@ -128,6 +129,7 @@ describe('GET /api/v1/events/live', () => {
 
     const res = await GET(
       new Request('http://localhost:3000/api/v1/events/live?category=PAYMENT&eventType=DEX_TRADE'),
+      undefined,
     );
     const reader = res.body!.getReader();
     await reader.read(); // connected event
@@ -150,7 +152,10 @@ describe('GET /api/v1/events/live', () => {
 
   it('rejects more than 20 filters with 400 VALIDATION_ERROR (#32)', async () => {
     const params = Array.from({ length: 21 }, (_, i) => `category=c${i}`).join('&');
-    const res = await GET(new Request(`http://localhost:3000/api/v1/events/live?${params}`));
+    const res = await GET(
+      new Request(`http://localhost:3000/api/v1/events/live?${params}`),
+      undefined,
+    );
     const body = await res.json();
 
     expect(res.status).toBe(400);
@@ -159,7 +164,10 @@ describe('GET /api/v1/events/live', () => {
   });
 
   it('rejects empty filter values with 400 VALIDATION_ERROR (#32)', async () => {
-    const res = await GET(new Request('http://localhost:3000/api/v1/events/live?category='));
+    const res = await GET(
+      new Request('http://localhost:3000/api/v1/events/live?category='),
+      undefined,
+    );
     const body = await res.json();
 
     expect(res.status).toBe(400);
@@ -168,7 +176,7 @@ describe('GET /api/v1/events/live', () => {
 
   it('closes the stream cleanly when the client disconnects (#33)', async () => {
     vi.useFakeTimers();
-    const res = await GET(new Request('http://localhost:3000/api/v1/events/live'));
+    const res = await GET(new Request('http://localhost:3000/api/v1/events/live'), undefined);
     const reader = res.body!.getReader();
 
     await reader.read(); // connected event

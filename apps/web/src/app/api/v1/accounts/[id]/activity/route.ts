@@ -5,6 +5,7 @@ import { errorResponse, successResponse, ErrorCode } from '@/lib/api-errors';
 import { buildPaginationArgs, paginatedResponse, type PaginationParams } from '@/lib/pagination';
 import { rateLimit } from '@/lib/rate-limit';
 import { isValidPublicKey } from '@mizpah-pulse/stellar';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,13 +26,13 @@ const ActivityQuerySchema = z.object({
  *
  * Fetch activity summary and recent events for a Stellar account.
  */
-export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+async function GETHandler(request: Request, props: { params: Promise<{ id: string }> }) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
     windowMs: 60_000,
     keyPrefix: 'account-activity',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
   try {
     const { id } = await props.params;
@@ -76,30 +77,37 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       pagination,
     );
 
-    return successResponse({
-      accountId: id,
-      summary: {
-        totalTransactions: total,
-        payments: paymentCount,
-        contractInteractions: contractCount,
+    return successResponse(
+      {
+        accountId: id,
+        summary: {
+          totalTransactions: total,
+          payments: paymentCount,
+          contractInteractions: contractCount,
+        },
+        total: result.total,
+        limit: result.limit,
+        cursor: result.cursor,
+        hasMore: result.hasMore,
+        // NOTE: never spread `result.data` (raw Prisma rows) here — BigInt
+        // `ledgerSequence` values are not JSON-serializable. Normalize first.
+        events: result.data.map((e) => ({
+          ...e,
+          ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),
+          payload:
+            typeof (e as unknown as { payload: unknown }).payload === 'string'
+              ? JSON.parse((e as unknown as { payload: string }).payload)
+              : (e as unknown as { payload: unknown }).payload,
+        })),
       },
-      total: result.total,
-      limit: result.limit,
-      cursor: result.cursor,
-      hasMore: result.hasMore,
-      // NOTE: never spread `result.data` (raw Prisma rows) here — BigInt
-      // `ledgerSequence` values are not JSON-serializable. Normalize first.
-      events: result.data.map((e) => ({
-        ...e,
-        ledgerSequence: (e as unknown as { ledgerSequence: bigint }).ledgerSequence.toString(),
-        payload:
-          typeof (e as unknown as { payload: unknown }).payload === 'string'
-            ? JSON.parse((e as unknown as { payload: string }).payload)
-            : (e as unknown as { payload: unknown }).payload,
-      })),
-    });
+      undefined,
+      undefined,
+      rateLimitResult.headers,
+    );
   } catch (error) {
     console.error('[API] Account activity error:', error);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch account activity');
   }
 }
+
+export const GET = withRequestId(GETHandler);

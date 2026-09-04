@@ -20,7 +20,7 @@ vi.mock('@mizpah-pulse/database', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: vi.fn(async () => null),
+  rateLimit: vi.fn(async () => ({ limited: false, headers: {}, response: null })),
 }));
 
 vi.mock('@/lib/api-key', () => ({
@@ -50,7 +50,7 @@ const event = (overrides: Record<string, unknown> = {}) => ({
 });
 
 async function listEvents(query = '') {
-  return GET(new Request(`http://localhost:3000/api/v1/events${query}`));
+  return GET(new Request(`http://localhost:3000/api/v1/events${query}`), undefined);
 }
 
 beforeEach(() => {
@@ -160,12 +160,14 @@ describe('GET /api/v1/events', () => {
 
   it('propagates the rate-limit response when throttled', async () => {
     const { rateLimit } = await import('@/lib/rate-limit');
-    (rateLimit as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      NextResponse.json(
+    (rateLimit as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      limited: true,
+      headers: {},
+      response: NextResponse.json(
         { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
         { status: 429 },
       ),
-    );
+    });
 
     const res = await listEvents();
     expect(res.status).toBe(429);

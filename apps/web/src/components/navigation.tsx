@@ -34,6 +34,13 @@ function getInitialSidebarState(): boolean {
   return stored === 'true';
 }
 
+const bottomNavItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: Home },
+  { href: '/dashboard/feed', label: 'Live Feed', icon: Activity },
+  { href: '/dashboard/search', label: 'Search', icon: Search },
+  { href: '/dashboard/wallets', label: 'Wallets', icon: Wallet },
+];
+
 const navigationItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/dashboard/feed', label: 'Live Feed', icon: Activity },
@@ -251,5 +258,44 @@ export function Navbar() {
         <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600" />
       </div>
     </header>
+  );
+}
+
+/**
+ * Bottom navigation for the four primary sections, shown on mobile only
+ * (issue #4). The sidebar's hamburger drawer is less ergonomic for thumbs;
+ * a fixed tab bar keeps Dashboard / Feed / Search / Wallets one tap away.
+ */
+export function BottomNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav
+      aria-label="Bottom navigation"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:hidden"
+    >
+      <ul className="mx-auto flex max-w-lg items-stretch justify-around">
+        {bottomNavItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <li key={item.href} className="min-w-0 flex-1">
+              <Link
+                href={item.href}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'flex flex-col items-center gap-0.5 px-1 py-2.5 text-[10px] font-medium transition-colors',
+                  isActive
+                    ? 'text-indigo-600 dark:text-indigo-400'
+                    : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300',
+                )}
+              >
+                <item.icon className="h-5 w-5" aria-hidden="true" />
+                <span className="truncate">{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

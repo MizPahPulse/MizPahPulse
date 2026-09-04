@@ -17,3 +17,4 @@ export * from './tooltip';
 export * from './avatar';
 export * from './dialog';
 export * from './progress';
+export * from './data-table';

@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe('rateLimit — in-memory fallback', () => {
-  it('allows requests up to the configured limit', async () => {
+  it('allows requests up to the configured limit and returns rate-limit headers', async () => {
     const request = new Request('http://localhost/api/v1/test');
     for (let i = 0; i < 3; i++) {
       const result = await rateLimit(request, {
@@ -59,7 +59,12 @@ describe('rateLimit — in-memory fallback', () => {
         windowMs: 60_000,
         keyPrefix: 'rl-mem-allow',
       });
-      expect(result).toBeNull();
+      expect(result.limited).toBe(false);
+      expect(result.response).toBeNull();
+      expect(result.headers['X-RateLimit-Limit']).toBe('3');
+      // Remaining decrements per request: 3 → 2 → 1.
+      expect(result.headers['X-RateLimit-Remaining']).toBe(String(3 - i - 1));
+      expect(result.headers['X-RateLimit-Reset']).toBeTruthy();
     }
   });
 
@@ -74,11 +79,14 @@ describe('rateLimit — in-memory fallback', () => {
       keyPrefix: 'rl-mem-429',
     });
 
-    expect(limited).not.toBeNull();
-    expect(limited!.status).toBe(429);
-    expect(limited!.headers.get('X-RateLimit-Limit')).toBe('2');
-    expect(limited!.headers.get('X-RateLimit-Remaining')).toBe('0');
-    expect(limited!.headers.get('Retry-After')).toBeTruthy();
+    expect(limited.limited).toBe(true);
+    expect(limited.response).not.toBeNull();
+    expect(limited.response!.status).toBe(429);
+    expect(limited.headers['X-RateLimit-Limit']).toBe('2');
+    expect(limited.headers['X-RateLimit-Remaining']).toBe('0');
+    expect(limited.response!.headers.get('X-RateLimit-Limit')).toBe('2');
+    expect(limited.response!.headers.get('X-RateLimit-Remaining')).toBe('0');
+    expect(limited.response!.headers.get('Retry-After')).toBeTruthy();
   });
 
   it('uses separate buckets per IP', async () => {
@@ -94,10 +102,10 @@ describe('rateLimit — in-memory fallback', () => {
     }
     expect(
       await rateLimit(reqA, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-mem-ip' }),
-    ).not.toBeNull();
+    ).toMatchObject({ limited: true });
     expect(
       await rateLimit(reqB, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-mem-ip' }),
-    ).toBeNull();
+    ).toMatchObject({ limited: false });
   });
 
   it('isolates counters across different key prefixes for the same IP', async () => {
@@ -111,11 +119,11 @@ describe('rateLimit — in-memory fallback', () => {
     // The same IP is exhausted under prefix A…
     expect(
       await rateLimit(request, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-prefix-a' }),
-    ).not.toBeNull();
+    ).toMatchObject({ limited: true });
     // …but unaffected under prefix B.
     expect(
       await rateLimit(request, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-prefix-b' }),
-    ).toBeNull();
+    ).toMatchObject({ limited: false });
   });
 
   it('resets the counter once the window has elapsed', async () => {
@@ -128,13 +136,13 @@ describe('rateLimit — in-memory fallback', () => {
     }
     expect(
       await rateLimit(request, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-window' }),
-    ).not.toBeNull();
+    ).toMatchObject({ limited: true });
 
     // After the window elapses the bucket starts fresh again.
     vi.advanceTimersByTime(61_000);
     expect(
       await rateLimit(request, { maxRequests: 2, windowMs: 60_000, keyPrefix: 'rl-window' }),
-    ).toBeNull();
+    ).toMatchObject({ limited: false });
   });
 });
 
@@ -200,9 +208,10 @@ describe('rateLimit — Redis backend', () => {
       windowMs: 60_000,
       keyPrefix: 'rl-redis-429',
     });
-    expect(limited).not.toBeNull();
-    expect(limited!.status).toBe(429);
-    expect(limited!.headers.get('X-RateLimit-Limit')).toBe('2');
+    expect(limited.limited).toBe(true);
+    expect(limited.response!.status).toBe(429);
+    expect(limited.response!.headers.get('X-RateLimit-Limit')).toBe('2');
+    expect(limited.headers['X-RateLimit-Limit']).toBe('2');
   });
 
   it('reports remaining allowance from the Redis store', async () => {
@@ -237,7 +246,7 @@ describe('rateLimit — Redis backend', () => {
     });
 
     // Rate limiting still works via the in-memory fallback.
-    expect(limited).not.toBeNull();
-    expect(limited!.status).toBe(429);
+    expect(limited.limited).toBe(true);
+    expect(limited.response!.status).toBe(429);
   });
 });

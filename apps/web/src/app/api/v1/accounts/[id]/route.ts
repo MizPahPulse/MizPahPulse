@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { successResponse, errorResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
 import { isValidPublicKey } from '@mizpah-pulse/stellar';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: Request, props: { params: Promise<{ id: string }> }) {
-  const requestId = createRequestId();
+async function GETHandler(request: Request, props: { params: Promise<{ id: string }> }) {
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
   try {
     const { id } = await props.params;
     if (!isValidPublicKey(id)) {
@@ -43,3 +44,5 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to fetch account', undefined, requestId);
   }
 }
+
+export const GET = withRequestId(GETHandler);
