@@ -4,8 +4,10 @@ import { EventType } from '@mizpah-pulse/types';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
+import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
+import { maskSecret, sanitizeWebhook } from '@/lib/webhook-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,28 +24,6 @@ const ListWebhooksQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   userId: z.string().optional().default('default'),
 });
-
-/**
- * Mask a signing secret so it can never be fully exposed through the API.
- */
-function maskSecret(secret: string): string {
-  const prefix = secret.startsWith('whsec_') ? 'whsec_' : '';
-  return `${prefix}${'\u2022'.repeat(12)}`;
-}
-
-/**
- * Strip the raw secret from a webhook record and attach a masked placeholder.
- */
-function sanitizeWebhook(w: {
-  secret?: string | null;
-  [key: string]: unknown;
-}): Record<string, unknown> {
-  const { secret, ...rest } = w;
-  return {
-    ...rest,
-    secretMasked: secret ? maskSecret(secret) : null,
-  };
-}
 
 /**
  * GET /api/v1/webhooks
@@ -108,8 +88,7 @@ async function GET(request: Request) {
       { 'X-Request-ID': requestId },
     );
   } catch (error) {
-    console.error('[API] Webhook list error:', error);
-    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to retrieve webhooks');
+    return prismaErrorResponse(error, 'Failed to retrieve webhooks', requestId);
   }
 }
 
@@ -171,8 +150,7 @@ async function POST(request: Request) {
         error.flatten() as unknown as Record<string, unknown>,
       );
     }
-    console.error('[API] Webhook create error:', error);
-    return errorResponse(ErrorCode.INTERNAL_ERROR, 'Failed to create webhook');
+    return prismaErrorResponse(error, 'Failed to create webhook');
   }
 }
 
