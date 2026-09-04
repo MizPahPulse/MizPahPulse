@@ -292,9 +292,9 @@ export default function WebhooksPage() {
           <Card key={stat.label} padding="md">
             <div className="text-center">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+              <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
                 {loading ? <Skeleton className="mx-auto h-8 w-16" /> : stat.value}
-              </p>
+              </div>
             </div>
           </Card>
         ))}

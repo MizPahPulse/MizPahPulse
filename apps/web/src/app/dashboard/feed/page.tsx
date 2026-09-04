@@ -316,6 +316,48 @@ export default function FeedPage() {
     setLiveAnnouncement(null);
   }, [isPaused]);
 
+  // ── URL deep-linking (#7): filters are reflected in (and restored from) the
+  // query string so a feed state can be shared/bookmarked and survives reloads.
+  useEffect(() => {
+    const readFiltersFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      if (q !== null) setSearch(q);
+      const categories = params.getAll('category');
+      if (categories.length > 0) setSelectedCategories(categories);
+      const sort = params.get('sort');
+      if (sort === 'asc' || sort === 'desc') setSortOrder(sort);
+    };
+
+    readFiltersFromUrl();
+    window.addEventListener('popstate', readFiltersFromUrl);
+    return () => window.removeEventListener('popstate', readFiltersFromUrl);
+  }, []);
+
+  // Debounced sync of the current filters into the URL (replaceState keeps the
+  // browser history tidy while typing).
+  const urlSyncTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (urlSyncTimerRef.current !== null) window.clearTimeout(urlSyncTimerRef.current);
+    urlSyncTimerRef.current = window.setTimeout(() => {
+      urlSyncTimerRef.current = null;
+      try {
+        const params = new URLSearchParams();
+        if (search) params.set('q', search);
+        selectedCategories.forEach((category) => params.append('category', category));
+        if (sortOrder !== 'desc') params.set('sort', sortOrder);
+        const qs = params.toString();
+        const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+        window.history.replaceState(null, '', url);
+      } catch {
+        // History API unavailable — deep-linking is progressive enhancement.
+      }
+    }, 300);
+    return () => {
+      if (urlSyncTimerRef.current !== null) window.clearTimeout(urlSyncTimerRef.current);
+    };
+  }, [search, selectedCategories, sortOrder]);
+
   const clearFeed = useCallback(() => {
     setEvents([]);
     try {

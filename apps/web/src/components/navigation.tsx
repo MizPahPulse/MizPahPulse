@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@mizpah-pulse/ui';
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants';
+import { useTheme } from '@/hooks/use-theme';
 import {
   Activity,
   BarChart3,
@@ -25,15 +26,7 @@ import {
   Radio,
 } from 'lucide-react';
 
-const DARK_MODE_KEY = 'mizpah-pulse:dark-mode';
 const SIDEBAR_COLLAPSED_KEY = 'mizpah-pulse:sidebar-collapsed';
-
-function getInitialDarkMode(): boolean {
-  if (typeof window === 'undefined') return false;
-  const stored = localStorage.getItem(DARK_MODE_KEY);
-  if (stored !== null) return stored === 'true';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
 
 function getInitialSidebarState(): boolean {
   if (typeof window === 'undefined') return false;
@@ -200,14 +193,9 @@ export function Sidebar() {
 }
 
 export function Navbar() {
-  const [dark, setDark] = useState(getInitialDarkMode);
+  const { theme, toggleTheme } = useTheme();
+  const dark = theme === 'dark';
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline'>('online');
-
-  // Apply dark mode on mount and persist changes
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem(DARK_MODE_KEY, String(dark));
-  }, [dark]);
 
   // Listen for online/offline events
   useEffect(() => {
@@ -220,8 +208,6 @@ export function Navbar() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  const toggleDark = () => setDark((d) => !d);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/80">
@@ -245,7 +231,7 @@ export function Navbar() {
       </div>
       <div className="flex items-center gap-3">
         <button
-          onClick={toggleDark}
+          onClick={toggleTheme}
           className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
           aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
