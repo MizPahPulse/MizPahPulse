@@ -12,6 +12,7 @@ import {
 } from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '@/context/WalletContext';
+import { useToast } from '@mizpah-pulse/ui';
 import { getNetworkConfig, getExplorerTxUrl, type StellarNetwork } from '@mizpah-pulse/stellar';
 
 /**
@@ -43,6 +44,7 @@ export interface InvokeResult {
  */
 export function useContractInvoke(contractId: string) {
   const { publicKey, isConnected } = useWallet();
+  const { addToast } = useToast();
   const [state, setState] = useState<InvokeState>('idle');
   const [result, setResult] = useState<InvokeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,16 +145,30 @@ export function useContractInvoke(contractId: string) {
 
         setResult(invokeResult);
         setState('success');
+        addToast({
+          type: 'success',
+          title: 'Contract invocation succeeded',
+          message: `${invokeResult.hash.slice(0, 12)}… confirmed on ledger`,
+          href: invokeResult.explorerUrl,
+          actionLabel: 'View on explorer',
+          duration: 8000,
+        });
         return invokeResult;
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'TRANSACTION_FAILED: Contract invocation failed';
         setError(message);
         setState('error');
+        addToast({
+          type: 'error',
+          title: 'Contract invocation failed',
+          message,
+          duration: 8000,
+        });
         return null;
       }
     },
-    [publicKey, isConnected, contractId, networkConfig],
+    [publicKey, isConnected, contractId, networkConfig, addToast],
   );
 
   /**

@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@mizpah-pulse/database';
 import { successResponse, errorResponse, ErrorCode, createRequestId } from '@/lib/api-errors';
 
+import { withRequestId } from '@/lib/request-id';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-  const requestId = createRequestId();
+async function GETHandler(request: Request) {
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
   try {
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
@@ -35,3 +37,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withRequestId(GETHandler);

@@ -19,7 +19,7 @@ vi.mock('@mizpah-pulse/database', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: vi.fn(async () => null),
+  rateLimit: vi.fn(async () => ({ limited: false, headers: {}, response: null })),
 }));
 
 import { GET } from '@/app/api/v1/search/route';
@@ -42,7 +42,10 @@ const event = (overrides: Record<string, unknown> = {}) => ({
 });
 
 async function search(query: string) {
-  return GET(new Request(`http://localhost:3000/api/v1/search?q=${encodeURIComponent(query)}`));
+  return GET(
+    new Request(`http://localhost:3000/api/v1/search?q=${encodeURIComponent(query)}`),
+    undefined,
+  );
 }
 
 beforeEach(() => {
@@ -171,5 +174,56 @@ describe('GET /api/v1/search', () => {
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('INTERNAL_ERROR');
     expect(body.error.message).toBe('Search failed');
+  });
+
+  it('pages through full-text event results with an offset (#2)', async () => {
+    // 11 rows → page 1 reports hasMore and only exposes 10.
+    prismaMock.findMany.mockResolvedValue(
+      Array.from({ length: 11 }, (_, i) => event({ id: `evt_${i}` })),
+    );
+
+    const res = await GET(
+      new Request(
+        `http://localhost:3000/api/v1/search?q=${encodeURIComponent('payment')}&offset=0`,
+      ),
+      undefined,
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.results.events).toHaveLength(10);
+    expect(body.data.pagination).toMatchObject({ offset: 0, hasMore: true, nextOffset: 10 });
+    expect(prismaMock.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ skip: 0, take: 11 }),
+    );
+
+    // Page 2 skips the first ten rows.
+    prismaMock.findMany.mockResolvedValue([event({ id: 'evt_11' })]);
+    const res2 = await GET(
+      new Request(
+        `http://localhost:3000/api/v1/search?q=${encodeURIComponent('payment')}&offset=10`,
+      ),
+      undefined,
+    );
+    const body2 = await res2.json();
+    expect(body2.data.results.events).toHaveLength(1);
+    expect(body2.data.pagination).toMatchObject({ offset: 10, hasMore: false, nextOffset: 11 });
+    expect(prismaMock.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ skip: 10, take: 11 }),
+    );
+  });
+
+  it('rejects a negative offset with 400 (#2)', async () => {
+    const res = await GET(
+      new Request(
+        `http://localhost:3000/api/v1/search?q=${encodeURIComponent('payment')}&offset=-1`,
+      ),
+      undefined,
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(prismaMock.findMany).not.toHaveBeenCalled();
   });
 });

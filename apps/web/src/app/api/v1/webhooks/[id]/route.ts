@@ -7,6 +7,7 @@ import { prismaErrorResponse } from '@/lib/prisma-errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { isPublicWebhookEndpoint } from '@/lib/ssrf';
 import { sanitizeWebhook } from '@/lib/webhook-utils';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,8 +37,8 @@ const UpdateWebhookSchema = z.object({
  *
  * Remove a webhook subscription.
  */
-export async function DELETE(
-  _request: Request,
+async function DELETEHandler(
+  request: Request,
   props: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   try {
@@ -48,7 +49,8 @@ export async function DELETE(
     await prisma.webhookSubscription.delete({ where: { id } });
     return successResponse({ deleted: true, id });
   } catch (error) {
-    return prismaErrorResponse(error, 'Failed to delete webhook');
+    const requestId = request.headers.get('X-Request-ID') ?? undefined;
+    return prismaErrorResponse(error, 'Failed to delete webhook', requestId);
   }
 }
 
@@ -57,7 +59,7 @@ export async function DELETE(
  *
  * Update a webhook subscription.
  */
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   props: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -66,9 +68,9 @@ export async function PATCH(
     windowMs: 60_000,
     keyPrefix: 'webhooks:update',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
-  const requestId = createRequestId();
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
 
   try {
     const { id } = await props.params;
@@ -123,7 +125,7 @@ export async function PATCH(
       }),
       undefined,
       undefined,
-      { 'X-Request-ID': requestId },
+      { 'X-Request-ID': requestId, ...rateLimitResult.headers },
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -137,3 +139,6 @@ export async function PATCH(
     return prismaErrorResponse(error, 'Failed to update webhook', requestId);
   }
 }
+
+export const DELETE = withRequestId(DELETEHandler);
+export const PATCH = withRequestId(PATCHHandler);

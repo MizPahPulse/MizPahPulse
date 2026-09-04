@@ -3,6 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { z } from 'zod';
 import { errorResponse, ErrorCode } from '@/lib/api-errors';
 import { parseLastEventId } from '@/lib/sse';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ const LiveEventsQuerySchema = z.object({
  * Clients connect and receive new events as they are processed. A client can
  * send `Last-Event-ID: <eventId>` to resume from where it left off.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const { searchParams } = new URL(request.url);
 
   const queryResult = LiveEventsQuerySchema.safeParse({
@@ -130,3 +131,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const GET = withRequestId(GETHandler);

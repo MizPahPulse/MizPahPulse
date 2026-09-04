@@ -201,3 +201,102 @@ describe('SearchPage keyboard navigation', () => {
     expect(screen.queryByRole('option', { selected: true })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Load-more pagination on search results (issue #2).
+ *
+ * The API response carries a `pagination` object ({ hasMore, nextOffset }); the
+ * page renders a "Load more" button while more pages exist and appends the next
+ * page's events without a reload.
+ */
+function eventRow(id: string, eventType = 'PAYMENT') {
+  return {
+    id,
+    eventType,
+    category: 'PAYMENT',
+    timestamp: '2026-01-01T00:00:00.000Z',
+    accountId: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  };
+}
+
+function searchPayload(events: unknown[], pagination?: unknown) {
+  return {
+    success: true,
+    data: {
+      query: 'USDC',
+      results: { accounts: [], transactions: [], contracts: [], events },
+      ...(pagination ? { pagination } : {}),
+    },
+  };
+}
+
+describe('SearchPage load-more pagination', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('shows a Load more button when the API reports more pages and appends on click (#2)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          searchPayload([eventRow('evt-1')], { offset: 0, hasMore: true, nextOffset: 10 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          searchPayload([eventRow('evt-11', 'DEX_TRADE')], {
+            offset: 10,
+            hasMore: false,
+            nextOffset: 20,
+          }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SearchPage />);
+    const input = screen.getByPlaceholderText(
+      'Search by address, tx hash, contract ID, or asset...',
+    );
+    fireEvent.change(input, { target: { value: 'USDC' } });
+
+    // First page renders with the load-more affordance.
+    expect(
+      await screen.findByText('1 result found', undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    const loadMore = await screen.findByRole('button', { name: 'Load more results' });
+    expect(loadMore).toBeInTheDocument();
+
+    // Clicking it requests the next offset and appends the new events.
+    fireEvent.click(loadMore);
+    expect(
+      await screen.findByText('2 results found', undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('offset=10'));
+    // No more pages → the button disappears.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Load more results' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('hides the Load more button when the API returns no further pages (#2)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        searchPayload([eventRow('evt-1')], { offset: 0, hasMore: false, nextOffset: 10 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SearchPage />);
+    const input = screen.getByPlaceholderText(
+      'Search by address, tx hash, contract ID, or asset...',
+    );
+    fireEvent.change(input, { target: { value: 'USDC' } });
+
+    expect(
+      await screen.findByText('1 result found', undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more results' })).not.toBeInTheDocument();
+  });
+});

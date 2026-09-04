@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * Returns API version information and service status.
  * No authentication required - useful for clients and monitoring.
  */
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json(
     {
       service: 'MizPahPulse API',
@@ -35,3 +36,5 @@ export async function GET() {
     },
   );
 }
+
+export const GET = withRequestId(GETHandler);

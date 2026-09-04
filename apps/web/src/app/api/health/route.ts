@@ -3,6 +3,7 @@ import { prisma } from '@mizpah-pulse/database';
 import { APP_VERSION } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 import { recordRequest, getMetricsSnapshot, getErrorRate } from '@/lib/monitoring';
+import { withRequestId, REQUEST_ID_HEADER } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,9 +22,10 @@ interface HealthStatus {
  * Health check endpoint for monitoring, load balancers, and orchestration.
  * Checks database connectivity and overall service health.
  */
-export async function GET(): Promise<NextResponse> {
+async function GETHandler(request: Request): Promise<NextResponse> {
   const start = Date.now();
   const checks: HealthStatus['checks'] = {};
+  const requestId = request.headers.get(REQUEST_ID_HEADER) ?? 'n/a';
 
   // Check database connectivity
   try {
@@ -34,7 +36,7 @@ export async function GET(): Promise<NextResponse> {
       latencyMs: Date.now() - dbStart,
     };
   } catch (err) {
-    logger.error('[Health] Database check failed:', err);
+    logger.error(`[Health] Database check failed (requestId=${requestId}):`, err);
     checks.database = {
       status: 'error',
       latencyMs: Date.now() - start,
@@ -101,3 +103,5 @@ export async function GET(): Promise<NextResponse> {
     },
   });
 }
+
+export const GET = withRequestId(GETHandler);

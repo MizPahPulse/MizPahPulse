@@ -22,7 +22,7 @@ vi.mock('@mizpah-pulse/database', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: vi.fn(async () => null),
+  rateLimit: vi.fn(async () => ({ limited: false, headers: {}, response: null })),
 }));
 
 vi.mock('@/lib/ssrf', () => ({
@@ -179,9 +179,14 @@ describe('PATCH /api/v1/webhooks/[id]', () => {
 
   it('propagates a rate-limit response when throttled', async () => {
     const { rateLimit } = await import('@/lib/rate-limit');
-    (rateLimit as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      NextResponse.json({ success: false, error: { code: 'RATE_LIMITED' } }, { status: 429 }),
-    );
+    (rateLimit as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      limited: true,
+      headers: {},
+      response: NextResponse.json(
+        { success: false, error: { code: 'RATE_LIMITED' } },
+        { status: 429 },
+      ),
+    });
 
     const res = await callPatch({ endpoint: 'https://example.com/hooks/new' });
     expect(res.status).toBe(429);

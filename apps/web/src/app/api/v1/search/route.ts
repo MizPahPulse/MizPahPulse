@@ -5,6 +5,7 @@ import { errorResponse, successResponse, ErrorCode, createRequestId } from '@/li
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { recordRequest } from '@/lib/monitoring';
+import { withRequestId } from '@/lib/request-id';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,13 +15,13 @@ export const dynamic = 'force-dynamic';
  *
  * Universal search across wallets, contracts, transactions, and assets.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const rateLimitResult = await rateLimit(request, {
     maxRequests: 30,
     windowMs: 60_000,
     keyPrefix: 'search',
   });
-  if (rateLimitResult) return rateLimitResult;
+  if (rateLimitResult.limited) return rateLimitResult.response!;
 
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
@@ -29,7 +30,17 @@ export async function GET(request: Request) {
     return errorResponse(ErrorCode.VALIDATION_ERROR, 'Search query must be at least 2 characters');
   }
 
-  const requestId = createRequestId();
+  // Pagination for the full-text event results (issue #2). Exact-match lookups
+  // (tx hash / public key / contract id) are not paginated — they return at
+  // most one row each — so the offset applies to the `events` bucket only.
+  const SEARCH_PAGE_SIZE = 10;
+  const rawOffset = searchParams.get('offset');
+  const offset = rawOffset === null ? 0 : Number.parseInt(rawOffset, 10);
+  if (rawOffset !== null && (Number.isNaN(offset) || offset < 0)) {
+    return errorResponse(ErrorCode.VALIDATION_ERROR, 'offset must be a non-negative integer');
+  }
+
+  const requestId = request.headers.get('X-Request-ID') ?? createRequestId();
 
   try {
     const results: Record<string, unknown[]> = {};
@@ -81,7 +92,8 @@ export async function GET(request: Request) {
       results.contracts = [{ contractId: q, eventCount, recentEvents: events.length }];
     }
 
-    // Full-text search on event types and accounts
+    // Full-text search on event types and accounts, paginated with an offset
+    // (issue #2). Fetch one extra row so `hasMore` needs no count query.
     const textMatches = await prisma.event.findMany({
       where: {
         OR: [
@@ -90,12 +102,16 @@ export async function GET(request: Request) {
           { assetCode: { contains: q, mode: 'insensitive' } },
         ],
       },
-      take: 10,
+      skip: offset,
+      take: SEARCH_PAGE_SIZE + 1,
       orderBy: { timestamp: 'desc' },
     });
 
-    if (textMatches.length > 0) {
-      results.events = textMatches.map(
+    const hasMore = textMatches.length > SEARCH_PAGE_SIZE;
+    const page = hasMore ? textMatches.slice(0, SEARCH_PAGE_SIZE) : textMatches;
+
+    if (page.length > 0) {
+      results.events = page.map(
         (e: { id: string; ledgerSequence: number | bigint; [key: string]: unknown }) => ({
           ...e,
           ledgerSequence: e.ledgerSequence.toString(),
@@ -108,14 +124,22 @@ export async function GET(request: Request) {
         query: q,
         results,
         totalResults: Object.values(results).reduce((s, arr) => s + arr.length, 0),
+        pagination: {
+          offset,
+          limit: SEARCH_PAGE_SIZE,
+          hasMore,
+          nextOffset: offset + page.length,
+        },
       },
       undefined,
       undefined,
-      { 'X-Request-ID': requestId },
+      { 'X-Request-ID': requestId, ...rateLimitResult.headers },
     );
   } catch (error) {
-    logger.error('[API] Search error:', error);
+    logger.error(`[API] Search error (requestId=${requestId}):`, error);
     recordRequest(0, true);
     return errorResponse(ErrorCode.INTERNAL_ERROR, 'Search failed', undefined, requestId);
   }
 }
+
+export const GET = withRequestId(GETHandler);

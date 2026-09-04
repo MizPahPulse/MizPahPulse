@@ -10,6 +10,7 @@ import {
   StatusDot,
   EmptyState,
   Spinner,
+  DataTable,
 } from '@mizpah-pulse/ui';
 import { ContractInvokeModal } from '@/components/ContractInvokeModal';
 import { useWallet } from '@/context/WalletContext';
@@ -171,56 +172,76 @@ export default function ContractsPage() {
         className="w-full sm:w-96"
       />
 
-      <div className="space-y-3">
-        {filtered.length === 0 ? (
-          <EmptyState
-            icon={<FileCode className="h-10 w-10" />}
-            title="No contracts found"
-            description="Try a different search term"
-          />
-        ) : (
-          filtered.map((c) => (
-            <Card key={c.id} padding="md" hover>
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950">
-                  <FileCode className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={<FileCode className="h-10 w-10" />}
+          title="No contracts found"
+          description="Try a different search term"
+        />
+      ) : (
+        /* Responsive table: real table on md+, stacked cards on mobile (#22) */
+        <DataTable
+          rows={filtered}
+          rowKey={(c) => c.id}
+          caption="Tracked smart contracts"
+          defaultSortIndex={2}
+          columns={[
+            {
+              header: 'Contract',
+              cell: (c) => (
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{c.name}</span>
+                  {statusIcon[c.status]}
+                  {c.id === 'pulse' && isConnected && (
+                    <Badge variant="success" size="sm">
+                      Deployed
+                    </Badge>
+                  )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {c.name}
-                    </span>
-                    {statusIcon[c.status]}
-                    {c.id === 'pulse' && isConnected && (
-                      <Badge variant="success" size="sm">
-                        Deployed
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="font-mono text-xs text-slate-500">
-                    {c.contractId.slice(0, 12)}...{c.contractId.slice(-8)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-slate-900 dark:text-slate-100">
-                    {c.invocations.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-slate-400">{c.lastCalled}</p>
-                </div>
-                {isConnected && (
-                  <button
-                    onClick={() => setInvokeContractId(c.contractId)}
-                    className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-400 dark:hover:bg-indigo-900"
-                  >
-                    <Zap className="h-3.5 w-3.5" />
-                    Invoke
-                  </button>
-                )}
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
+              ),
+            },
+            {
+              header: 'Contract ID',
+              cell: (c) => (
+                <span className="font-mono text-xs text-slate-500">
+                  {c.contractId.slice(0, 12)}...{c.contractId.slice(-8)}
+                </span>
+              ),
+            },
+            {
+              header: 'Invocations',
+              sortValue: (c) => c.invocations,
+              className: 'text-right',
+              cell: (c) => (
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {c.invocations.toLocaleString()}
+                </span>
+              ),
+            },
+            {
+              header: 'Last called',
+              cell: (c) => <span className="text-xs text-slate-400">{c.lastCalled}</span>,
+            },
+            ...(isConnected
+              ? [
+                  {
+                    header: '',
+                    className: 'text-right',
+                    cell: (c: ContractActivity) => (
+                      <button
+                        onClick={() => setInvokeContractId(c.contractId)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-400 dark:hover:bg-indigo-900"
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        Invoke
+                      </button>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
 
       {/* Contract Invocation Modal */}
       {invokeContractId && (

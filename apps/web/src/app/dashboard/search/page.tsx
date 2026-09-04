@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, cn, EmptyState, Spinner, Skeleton, Badge } from '@mizpah-pulse/ui';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useInfiniteScroll } from '@/hooks/use-infinite-scroll';
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 import { Search, Hash, Wallet, FileCode, Coins } from 'lucide-react';
 
@@ -42,9 +43,18 @@ export default function SearchPage() {
   const debouncedQuery = useDebounce(query, 400);
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [pagination, setPagination] = useState<{
+    offset: number;
+    hasMore: boolean;
+    nextOffset: number;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Monotonic counter so a slow load-more response never overwrites results
+  // from a newer query.
+  const searchSeqRef = useRef(0);
 
   // Flatten grouped results into a single ordered list for arrow-key navigation.
   const items = useMemo<FlatResult[]>(() => {
@@ -133,29 +143,63 @@ export default function SearchPage() {
     if (debouncedQuery.length < 2) {
       setResults(null);
       setError(null);
+      setPagination(null);
       return;
     }
 
+    const seq = ++searchSeqRef.current;
     const fetchResults = async () => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`/api/v1/search?q=${encodeURIComponent(debouncedQuery)}`);
         const data = await res.json();
+        if (seq !== searchSeqRef.current) return; // a newer query superseded this one
         if (data.success) {
           setResults(data.data.results);
+          setPagination(data.data.pagination ?? null);
         } else {
           setError(data.error?.message || 'Search failed');
         }
       } catch {
-        setError('Failed to connect to search service');
+        if (seq === searchSeqRef.current) setError('Failed to connect to search service');
       } finally {
-        setLoading(false);
+        if (seq === searchSeqRef.current) setLoading(false);
       }
     };
 
     fetchResults();
   }, [debouncedQuery]);
+
+  /** Fetch the next page of event matches and append them (issue #2). */
+  const loadMore = useCallback(async () => {
+    if (!debouncedQuery || !pagination?.hasMore || loading || loadingMore) return;
+    const seq = searchSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/v1/search?q=${encodeURIComponent(debouncedQuery)}&offset=${pagination.nextOffset}`,
+      );
+      const data = await res.json();
+      if (seq !== searchSeqRef.current || !data.success) return;
+      const more = data.data.results?.events ?? [];
+      setResults((prev) => (prev ? { ...prev, events: [...(prev.events ?? []), ...more] } : prev));
+      setPagination(data.data.pagination ?? null);
+    } catch {
+      // Transient failure — the button stays visible so the user can retry.
+    } finally {
+      if (seq === searchSeqRef.current) setLoadingMore(false);
+    }
+  }, [debouncedQuery, pagination, loading, loadingMore]);
+
+  // Infinite scroll: auto-load the next page as the sentinel nears the viewport.
+  const { sentinelRef } = useInfiniteScroll({
+    hasMore: !!pagination?.hasMore && !loading,
+    isLoading: loadingMore,
+    onLoadMore: () => {
+      void loadMore();
+    },
+  });
 
   const searchTypes = [
     { icon: Wallet, label: 'Wallet Address', placeholder: 'GABC...' },
@@ -426,6 +470,22 @@ export default function SearchPage() {
               <p className="text-center text-xs text-slate-400">
                 {totalResults} result{totalResults !== 1 ? 's' : ''} found
               </p>
+            )}
+
+            {/* Pagination: the sentinel doubles as the trigger for the
+                IntersectionObserver; the button is the explicit fallback and
+                the accessible way to load more (issue #2). */}
+            {pagination?.hasMore && !loading && (
+              <div ref={sentinelRef} className="pt-1 text-center">
+                <button
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-wait disabled:opacity-60 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                >
+                  {loadingMore && <Spinner size="sm" />}
+                  {loadingMore ? 'Loading more…' : 'Load more results'}
+                </button>
+              </div>
             )}
           </div>
         )}

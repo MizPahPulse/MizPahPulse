@@ -17,7 +17,7 @@ vi.mock('@mizpah-pulse/database', () => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: vi.fn(async () => null),
+  rateLimit: vi.fn(async () => ({ limited: false, headers: {}, response: null })),
 }));
 
 import { GET as ContractEventsGET } from '@/app/api/v1/contracts/[id]/events/route';

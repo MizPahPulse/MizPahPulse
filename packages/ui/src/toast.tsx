@@ -7,6 +7,10 @@ export interface Toast {
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message?: string;
+  /** Optional external link rendered as an action in the toast (e.g. an explorer URL). */
+  href?: string;
+  /** Label for the optional link (defaults to "View details"). */
+  actionLabel?: string;
   duration?: number;
 }
 
@@ -108,6 +112,16 @@ function ToastContainer({
             </p>
             {toast.message && (
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{toast.message}</p>
+            )}
+            {toast.href && (
+              <a
+                href={toast.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block text-xs font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+              >
+                {toast.actionLabel ?? 'View details'}
+              </a>
             )}
           </div>
           <button
