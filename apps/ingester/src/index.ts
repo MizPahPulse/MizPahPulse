@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { startWebhookWorker } from './webhook-worker';
 import { startHealthServer, updateHealth, recordProcessedEvent } from './health-check';
 import { runEventRetention, parseRetentionDays, RETENTION_INTERVAL_MS } from './retention';
+import { initSentry, installProcessHandlers } from './sentry';
+import { rollupPreviousDay, DAILY_STATS_INTERVAL_MS } from './daily-stats';
 import type { RawStellarEvent } from '@mizpah-pulse/types';
 
 /**
@@ -317,6 +319,10 @@ async function main() {
   console.log('  MizpahPulse — Event Ingestion Engine');
   console.log('═══════════════════════════════════════════');
 
+  // Error tracking (issue #76): no-op unless SENTRY_DSN is set.
+  initSentry();
+  installProcessHandlers();
+
   // Verify database connection
   try {
     await prisma.$connect();
@@ -366,6 +372,30 @@ async function main() {
   // Start event retention/pruning (issue #53). Disabled unless
   // EVENT_RETENTION_DAYS is set; runs once on startup, then on an interval.
   await startRetentionJob();
+
+  // Start DailyStat rollup (issue #47): roll up the previous UTC day on
+  // startup, then again every 6 hours. Idempotent by design.
+  await startDailyStatsJob();
+
+  // ──────────────────────────────────────────────
+  // DailyStat Rollup (issue #47)
+  // ──────────────────────────────────────────────
+  async function startDailyStatsJob(): Promise<void> {
+    const run = async () => {
+      try {
+        const result = await rollupPreviousDay();
+        console.log(
+          `[DailyStats] Rolled up ${result.buckets} bucket(s) for ${result.day.toISOString().slice(0, 10)}`,
+        );
+      } catch (err) {
+        console.error('[DailyStats] Rollup error:', err);
+      }
+    };
+
+    await run();
+    const timer = setInterval(run, DAILY_STATS_INTERVAL_MS);
+    activeTimers.push(timer);
+  }
 
   // ──────────────────────────────────────────────
   // Event Retention / Pruning (issue #53)

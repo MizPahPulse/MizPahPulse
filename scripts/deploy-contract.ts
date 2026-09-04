@@ -19,6 +19,7 @@ import {
   Address,
   rpc,
   StrKey,
+  xdr,
 } from '@stellar/stellar-sdk';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -89,6 +90,52 @@ async function simulateAndSend(
   return sendResp.hash;
 }
 
+/**
+ * Verify that the code actually stored on-chain matches the local WASM
+ * artifact (issue #68).
+ *
+ * Reads the contract instance's `WASM_HASH` ledger entry via Soroban RPC and
+ * compares it to the sha256 of the locally built `pulse_contract.wasm`. A
+ * mismatch means the deployed code cannot be trusted to match this source
+ * tree — the script fails loudly instead of reporting success.
+ */
+async function verifyDeployedContract(
+  contractId: string,
+  expectedWasmHash: Buffer,
+  sorobanRpc: rpc.Server,
+): Promise<void> {
+  console.log('');
+  console.log(`🔎 [Verify] Reading on-chain WASM_HASH for ${contractId} ...`);
+
+  const key = xdr.LedgerKey.contractData(
+    new xdr.LedgerKeyContractData({
+      contract: Address.fromString(contractId).toScAddress(),
+      key: xdr.ScVal.scvSymbol('WASM_HASH'),
+      durability: xdr.ContractDataDurability.persistent(),
+    }),
+  );
+
+  const response = await sorobanRpc.getLedgerEntries(key);
+  const entry = response.entries?.[0];
+  if (!entry) {
+    throw new Error(`❌ Verification failed: no WASM_HASH ledger entry found for ${contractId}`);
+  }
+
+  const onChainHash = entry.val.contractData().val().bytes();
+  if (onChainHash.equals(expectedWasmHash)) {
+    console.log(
+      `✅ [Verify] On-chain WASM hash matches the local artifact (sha256 ${expectedWasmHash.toString('hex')})`,
+    );
+    return;
+  }
+
+  throw new Error(
+    `❌ Verification FAILED: on-chain WASM hash ${onChainHash.toString('hex')} ` +
+      `differs from the local artifact ${expectedWasmHash.toString('hex')}. ` +
+      'Rebuild with the committed Cargo.lock (--locked) and redeploy.',
+  );
+}
+
 async function deployContract() {
   const deployerSecret = process.env.DEPLOYER_SECRET;
   if (!deployerSecret) {
@@ -149,6 +196,9 @@ async function deployContract() {
     ]);
     const contractHash = crypto.createHash('sha256').update(preimageData).digest();
     const contractId = StrKey.encodeContract(contractHash);
+
+    // ── Verify Deployed Code (issue #68) ──────
+    await verifyDeployedContract(contractId, wasmHash, sorobanRpc);
 
     console.log('');
     console.log('═══════════════════════════════════════════');

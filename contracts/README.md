@@ -140,3 +140,135 @@ pulse/
 | `get_last_received()` | Last cross-contract pulse received |
 | `is_paused()` / `is_killed()` | Pause / kill switch state |
 | `estimate_pulse_cost()` | Read-only gas cost estimate (stroops) |
+
+## End-to-End Deployment & Interaction Guide
+
+This walkthrough takes a fresh contributor from source to a live contract on
+**Stellar Testnet**, then shows how to interact with it from the CLI and how
+its events surface in the app dashboard.
+
+### Prerequisites
+
+- Rust 1.88+ with the `wasm32-unknown-unknown` target
+- Node 20+ (the deploy script runs on `tsx`)
+- A Stellar Testnet account with XLM for fees (friendbot below)
+
+### Step 1 — Build the WASM artifact
+
+```bash
+cd contracts
+cargo build --target wasm32-unknown-unknown --release --locked
+```
+
+**Expected output:** the artifact lands at
+`contracts/target/wasm32-unknown-unknown/release/pulse_contract.wasm` (a few
+hundred KB).
+
+### Step 2 — Create and fund a Testnet account
+
+```bash
+# Generate a keypair (prints the secret key)
+node -e "const {Keypair}=require('@stellar/stellar-sdk'); const kp=Keypair.random(); console.log('secret:', kp.secret()); console.log('public:', kp.publicKey());"
+
+# Fund it with the Testnet friendbot (10,000 XLM, no real value)
+curl \"https://friendbot.stellar.org?addr=G...PUBLIC...\"
+```
+
+**Expected output:** friendbot returns a JSON transaction receipt with
+`successful: true`.
+
+### Step 3 — Deploy
+
+```bash
+# From the repository root
+DEPLOYER_SECRET=S... npx tsx scripts/deploy-contract.ts
+```
+
+The script uploads the WASM, creates the contract, derives its ID, and —
+since issue #68 — **verifies that the on-chain `WASM_HASH` ledger entry
+matches the local artifact** before reporting success.
+
+**Expected output:**
+
+```
+📦 WASM: 96.4 KB
+⏳ [Upload] Simulating...
+⏳ [Create] Simulating...
+🔎 [Verify] Reading on-chain WASM_HASH for C... ...
+✅ [Verify] On-chain WASM hash matches the local artifact (sha256 ...)
+🎉 PulseContract Deployed!
+  Contract ID: C...
+```
+
+Keep the **Contract ID** (`C…`) — you need it for every interaction below.
+
+### Step 4 — Initialize and interact via the Soroban CLI
+
+First add the `soroban` CLI (installs the same toolchain as the contract):
+
+```bash
+cargo install --locked soroban-cli --features opt
+```
+
+Point it at Testnet and initialize the contract with your public key as owner:
+
+```bash
+export SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+soroban contract invoke \\
+  --id C... \\
+  --source S... \\
+  --network testnet \\
+  -- initialize --owner G...PUBLIC...
+```
+
+Fire a pulse and read the counter back:
+
+```bash
+soroban contract invoke --id C... --source S... --network testnet -- pulse --caller alice
+# → returns the new pulse count, e.g. { "ok": 1 }
+
+soroban contract invoke --id C... --source S... --network testnet -- get_pulse_count
+# → { "ok": 1 }
+```
+
+Admin ops (owner only — swap `S...` for a non-owner key to see
+`NotAuthorized`):
+
+```bash
+soroban contract invoke --id C... --source S... --network testnet -- pause
+soroban contract invoke --id C... --source S... --network testnet -- pulse --caller bob   # fails: ContractPaused
+soroban contract invoke --id C... --source S... --network testnet -- unpause
+```
+
+### Step 5 — Interact via the app dashboard
+
+1. Run the stack locally (`docker compose up -d`, then `npm run dev` in
+   `apps/web`) or point your deployed app at the Testnet RPC.
+2. Open **Dashboard → Contracts** — the deployed contract appears in the
+   list with its event count.
+3. Connect your Freighter wallet (Testnet) and use the **Invoke** panel to
+   call `pulse`; the panel records the invocation in the contract's history.
+4. Open **Dashboard → Feed** (or the analytics page) to see the `pulse/fired`
+   events the ingester captured for the contract.
+
+### Step 6 — Verify on Stellar Expert
+
+1. Open [Stellar Expert Testnet](https://testnet.stellarexpert.org/).
+2. Search for your **Contract ID** (`C…`).
+3. The contract page shows its ledger entries: `META` (owner, paused,
+   version), `PULSE` (count, last caller, last pulse timestamp), and `MAX_COUNT`
+   when configured.
+4. Open the **Operations / Transfers** tab to see the deploy and each
+   `invoke host function` operation you sent.
+
+### Troubleshooting
+
+| Error | Cause & fix |
+|-------|-------------|
+| `P1000` / `error: network down` | RPC URL typo or Testnet outage. Confirm `SOROBAN_RPC_URL` and retry. |
+| `tx_failed` during upload/create | Account has no XLM for fees or sequence number collision. Re-run friendbot and retry. |
+| `ContractNotFound` | The contract ID is wrong, or the contract was never created (check Step 3 output). |
+| `NotAuthorized` | You are invoking an admin op (e.g. `pause`, `set_signers`) with a non-owner source. Use the deployer secret. |
+| `ContractPaused` | The contract is paused (owner `pause` or committee `emergency_pause`). Call `unpause`/`emergency_resume` as owner/committee. |
+| `PulseCapReached` | The counter hit `set_max_pulse_count`. Raise the cap (owner only) or the cap stays enforced. |
+| WASM verification fails | On-chain `WASM_HASH` differs from the local artifact — rebuild with `--locked` and re-run the deploy script. |

@@ -7,6 +7,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { requireApiKey } from '@/lib/api-key';
 import { withRequestId } from '@/lib/request-id';
 import {
+  buildDailyStatBuckets,
   buildTimeseriesBuckets,
   RANGE_MS,
   type Granularity,
@@ -87,12 +88,23 @@ async function GETHandler(request: Request) {
       orderBy: { timestamp: 'asc' },
     });
 
-    const data = buildTimeseriesBuckets(
-      rows as Array<{ timestamp: Date; category: string }>,
-      granularity as Granularity,
-      range as TimeseriesRange,
-      now,
-    );
+    let data;
+    if (granularity === 'day') {
+      // Prefer the pre-aggregated DailyStat table (issue #47) when rollups
+      // exist; raw events still fill any day not yet rolled up (today).
+      const stats = await prisma.dailyStat.findMany({
+        where: { date: { gte: startDate } },
+        select: { date: true, category: true, count: true },
+      });
+      data = buildDailyStatBuckets(stats, rows, range as TimeseriesRange, now);
+    } else {
+      data = buildTimeseriesBuckets(
+        rows as Array<{ timestamp: Date; category: string }>,
+        granularity as Granularity,
+        range as TimeseriesRange,
+        now,
+      );
+    }
 
     cachedTimeseries = { key: cacheKey, data, timestamp: now };
 

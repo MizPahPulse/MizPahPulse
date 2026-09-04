@@ -869,6 +869,93 @@ fn test_signers_reconfiguration_updates_threshold() {
     assert_eq!(stored.len(), 1);
 }
 
+/// ── Emergency multi-sig override (issue #58) ──────────────────────────
+
+#[test]
+fn test_emergency_pause_requires_configured_signers() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // No multi-sig configuration exists → the override must be rejected.
+    let result = client.try_emergency_pause();
+    assert!(result.is_err(), "emergency_pause without signers must fail");
+    let result = client.try_emergency_resume();
+    assert!(result.is_err(), "emergency_resume without signers must fail");
+}
+
+#[test]
+fn test_emergency_pause_rejects_insufficient_signers() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+
+    // Configure a 2-of-2 committee directly (bypasses the owner-only setter
+    // so we can exercise the auth gate without mock_all_auths).
+    let signer_a = env.register_contract(None, PulseContract);
+    let signer_b = env.register_contract(None, PulseContract);
+    env.as_contract(&id, || {
+        let signers = Vec::from_array(&env, [signer_a.clone(), signer_b.clone()]);
+        env.storage().instance().set(&MULTISIG_KEY, &(signers, 2u32));
+    });
+
+    // The test invoker is not one of the signers → insufficient signers.
+    let result = client.try_emergency_pause();
+    assert!(result.is_err(), "emergency_pause without signer auth must fail");
+}
+
+#[test]
+fn test_emergency_pause_and_resume_with_signer_threshold() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let other = env.register_contract(None, PulseContract);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone(), other.clone()]);
+    client.set_signers(&signers, &2u32);
+
+    // Emergency pause engages the circuit breaker independently of the owner.
+    client.emergency_pause();
+    assert!(client.is_paused());
+    let result = client.try_pulse(&symbol_short!("alice"));
+    assert!(result.is_err(), "pulses must be blocked while emergency-paused");
+
+    // Emergency resume lifts it.
+    client.emergency_resume();
+    assert!(!client.is_paused());
+    let count = client.pulse(&symbol_short!("alice"));
+    assert_eq!(count, 1u32);
+}
+
+#[test]
+fn test_emergency_override_emits_distinct_event_topics() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let other = env.register_contract(None, PulseContract);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone(), other.clone()]);
+    client.set_signers(&signers, &2u32);
+    client.emergency_pause();
+    client.emergency_resume();
+
+    let topics = emitted_topic_pairs(&env);
+    assert!(
+        topics
+            .iter()
+            .any(|(t0, t1)| t0 == &symbol_short!("emergency") && t1 == &Some(symbol_short!("paused"))),
+        "emergency_pause must emit emergency/paused, got {topics:?}"
+    );
+    assert!(
+        topics
+            .iter()
+            .any(|(t0, t1)| t0 == &symbol_short!("emergency") && t1 == &Some(symbol_short!("resumed"))),
+        "emergency_resume must emit emergency/resumed, got {topics:?}"
+    );
+}
+
 /// ── Upgrade storage preservation (issue #62) ───────────────────────────
 
 #[test]
@@ -1127,5 +1214,124 @@ proptest! {
             third, 2,
             "the cooldown window must reset once the elapsed time passes"
         );
+    }
+
+    /// Invariant (issue #66): the counter is monotonic — it never decreases
+    /// and equals the sum of all successful `batch_pulse` increments, even
+    /// under mixed batch sizes.
+    #[test]
+    fn counter_is_monotonic_over_batches(
+        batch_sizes in proptest::collection::vec(1u32..=8, 1..=20),
+        caller in caller_symbol_strategy(),
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+
+        let symbol = Symbol::new(&env, &caller);
+        let mut expected: u32 = 0;
+        let mut last_count: u32 = 0;
+
+        for batch_size in batch_sizes {
+            let mut callers = Vec::new(&env);
+            for _ in 0..batch_size {
+                callers.push_back(symbol.clone());
+            }
+
+            let count = client.batch_pulse(&callers);
+            expected = expected.checked_add(batch_size).unwrap();
+            prop_assert_eq!(count, expected, "counter must equal the sum of increments");
+            prop_assert!(
+                count >= last_count,
+                "counter must never decrease (was {last_count}, now {count})"
+            );
+            last_count = count;
+        }
+    }
+
+    /// Invariant (issue #66): the multi-sig signer set always respects size
+    /// bounds — `set_signers` succeeds iff `1 <= threshold <= signer_count`,
+    /// and the stored set always satisfies `0 < threshold <= len(signers)`.
+    #[test]
+    fn signer_set_size_bounds(
+        signer_count in 0u32..=10,
+        threshold in 0u32..=12,
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+        env.mock_all_auths();
+
+        // Pool of distinct signer addresses.
+        let pool: std::vec::Vec<Address> = (0..10)
+            .map(|_| env.register_contract(None, PulseContract))
+            .collect();
+
+        let mut signers = Vec::new(&env);
+        for i in 0..signer_count {
+            signers.push_back(pool[i as usize].clone());
+        }
+
+        let valid = threshold != 0 && threshold <= signer_count;
+        let result = client.try_set_signers(&signers, &threshold);
+
+        if valid {
+            prop_assert!(result.is_ok(), "valid config must be accepted");
+            let (stored, stored_threshold) = client.get_signers();
+            prop_assert_eq!(stored.len() as u32, signer_count);
+            prop_assert_eq!(stored_threshold, threshold);
+            prop_assert!(stored_threshold > 0 && stored_threshold <= stored.len() as u32);
+        } else {
+            prop_assert!(result.is_err(), "invalid config must be rejected");
+            // Storage is untouched on rejection.
+            let (stored, stored_threshold) = client.get_signers();
+            prop_assert_eq!(stored.len() as u32, 0);
+            prop_assert_eq!(stored_threshold, 0);
+        }
+    }
+
+    /// Invariant (issue #66): the rate limiter is a deterministic state
+    /// machine — a call succeeds iff the elapsed ledger time since the last
+    /// successful call is at least the cooldown.
+    #[test]
+    fn rate_limit_matches_state_machine(
+        cooldown in 1u64..=1_000u64,
+        caller in caller_symbol_strategy(),
+        advances in proptest::collection::vec(0u64..=2_000u64, 1..=10),
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+
+        let symbol = Symbol::new(&env, &caller);
+        let mut now: u64 = 1_000_000;
+        let mut last_success: u64 = 0;
+        let mut expected_count: u32 = 0;
+
+        env.ledger().set_timestamp(now);
+
+        for advance in advances {
+            now = now.saturating_add(advance);
+            env.ledger().set_timestamp(now);
+
+            let should_succeed = last_success == 0 || now.saturating_sub(last_success) >= cooldown;
+            if should_succeed {
+                let count = client.rate_limited_pulse(&symbol, &cooldown);
+                expected_count += 1;
+                prop_assert_eq!(
+                    count, expected_count,
+                    "successful call must increment exactly once"
+                );
+                last_success = now;
+            } else {
+                let result = client.try_rate_limited_pulse(&symbol, &cooldown);
+                prop_assert!(
+                    result.is_err(),
+                    "call inside the cooldown window must be rejected"
+                );
+            }
+        }
+
+        prop_assert_eq!(client.get_pulse_count(), expected_count);
     }
 }
