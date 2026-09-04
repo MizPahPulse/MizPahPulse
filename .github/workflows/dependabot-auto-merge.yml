@@ -1,0 +1,32 @@
+# Auto-approve and auto-merge Dependabot pull requests (issue #80).
+#
+# Dependabot groups patch/minor updates into a single PR per ecosystem
+# (see .github/dependabot.yml). This workflow approves those PRs and
+# enables GitHub auto-merge for them, so low-risk updates land without
+# manual intervention.
+#
+# Prerequisite: enable "Allow auto-merge" in the repository settings
+# (Settings → General → Pull Requests → Allow auto-merge).
+name: Dependabot auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    steps:
+      - name: Approve and enable auto-merge
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

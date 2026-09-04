@@ -68,6 +68,7 @@ const TOPIC_OWNER_CHANGE: Symbol = symbol_short!("owner_chg");
 const TOPIC_PAUSE: Symbol = symbol_short!("paused");
 const TOPIC_UNPAUSE: Symbol = symbol_short!("unpaused");
 const TOPIC_BATCH: Symbol = symbol_short!("batch");
+const TOPIC_SIGNERS: Symbol = symbol_short!("signers");
 
 /// Maximum batch size for batch_pulse
 const MAX_BATCH_SIZE: u32 = 50;
@@ -165,6 +166,18 @@ impl PulseContract {
 
     /// ── Upgrade Mechanism ─────────────────────
 
+    /// Get the current contract version.
+    ///
+    /// Returns `0` when the contract has not been initialized yet and the
+    /// recorded version (starting at `1` after [`Self::initialize`]) otherwise.
+    pub fn get_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get::<Symbol, ContractMeta>(&META_KEY)
+            .map(|m| m.version)
+            .unwrap_or(0)
+    }
+
     /// Upgrade the contract version (only owner).
     /// Stores a version record for audit trail.
     pub fn upgrade_version(
@@ -242,6 +255,11 @@ impl PulseContract {
         let signer_count = signers.len();
         let signer_data = (signers, threshold);
         env.storage().instance().set(&MULTISIG_KEY, &signer_data);
+
+        env.events().publish(
+            (TOPIC_SIGNERS, symbol_short!("updated")),
+            (signer_count, threshold),
+        );
 
         log!(
             &env,

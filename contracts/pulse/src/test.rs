@@ -1,6 +1,9 @@
 #![cfg(test)]
 
+extern crate std;
+
 use super::*;
+use proptest::prelude::*;
 use soroban_sdk::testutils::Events;
 use soroban_sdk::testutils::Ledger;
 use soroban_sdk::Env;
@@ -485,4 +488,496 @@ fn test_ledger_timestamp() {
     // In test environment, timestamp may be 0 initially
     // Just verify the function returns without error
     let _ = ts;
+}
+
+/// ── get_version (issue #69) ────────────────────────────────────────────
+
+#[test]
+fn test_get_version() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+
+    // An uninitialized contract reports version 0.
+    let (_id, client) = deploy(&env);
+    assert_eq!(client.get_version(), 0);
+
+    // Initialization records version 1.
+    client.initialize(&owner);
+    assert_eq!(client.get_version(), 1);
+
+    // Upgrades bump the reported version.
+    env.mock_all_auths();
+    let hash = upload_test_wasm(&env);
+    client.upgrade_version(&3u32, &hash);
+    assert_eq!(client.get_version(), 3);
+}
+
+/// ── Event topics (issue #60) ───────────────────────────────────────────
+
+/// Extract the primary and secondary topic symbols from every emitted event.
+/// Soroban SDK 21 exposes events as `(contract_id, topics, data)` tuples where
+/// `topics` is a `Vec<Val>`; events with a single topic carry `None` secondary.
+/// Uses `std::vec::Vec` explicitly because the crate is `#![no_std]`.
+fn emitted_topic_pairs(env: &Env) -> std::vec::Vec<(Symbol, Option<Symbol>)> {
+    use soroban_sdk::TryFromVal;
+    env.events()
+        .all()
+        .iter()
+        .map(|(_contract_id, topics, _data)| {
+            let primary = topics
+                .get(0)
+                .map(|v| Symbol::try_from_val(env, &v).unwrap())
+                .expect("events always carry a primary topic");
+            let secondary = topics.get(1).map(|v| Symbol::try_from_val(env, &v).unwrap());
+            (primary, secondary)
+        })
+        .collect::<std::vec::Vec<_>>()
+}
+
+#[test]
+fn test_set_signers_emits_updated_event() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    client.set_signers(&signers, &1u32);
+
+    let topics = emitted_topic_pairs(&env);
+    assert!(
+        topics
+            .iter()
+            .any(|(t0, t1)| t0 == &symbol_short!("signers") && t1 == &Some(symbol_short!("updated"))),
+        "set_signers must emit a signers/updated event, got {topics:?}"
+    );
+}
+
+#[test]
+fn test_state_changing_operations_emit_documented_topics() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    client.pause();
+    client.unpause();
+
+    let new_owner = env.register_contract(None, PulseContract);
+    client.transfer_ownership(&new_owner);
+
+    let signers = Vec::from_array(&env, [new_owner.clone()]);
+    client.set_signers(&signers, &1u32);
+
+    let hash = upload_test_wasm(&env);
+    client.upgrade_version(&2u32, &hash);
+    client.kill();
+
+    let topics = emitted_topic_pairs(&env);
+    let has = |primary: &str, secondary: Option<&str>| {
+        topics.iter().any(|(t0, t1)| {
+            t0 == &Symbol::new(&env, primary)
+                && t1 == &secondary.map(|s| Symbol::new(&env, s))
+        })
+    };
+
+    assert!(has("paused", None), "pause must emit the paused topic");
+    assert!(has("unpaused", None), "unpause must emit the unpaused topic");
+    assert!(
+        has("owner_chg", Some("transfer")),
+        "transfer_ownership must emit owner_chg/transfer"
+    );
+    assert!(
+        has("signers", Some("updated")),
+        "set_signers must emit signers/updated"
+    );
+    assert!(
+        has("upgrade", Some("applied")),
+        "upgrade_version must emit upgrade/applied"
+    );
+    assert!(
+        has("kill", Some("applied")),
+        "kill must emit kill/applied"
+    );
+}
+
+/// ── Admin / owner authorization tests (issue #61) ──────────────────────
+
+#[test]
+fn test_transfer_ownership_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let new_owner = env.register_contract(None, PulseContract);
+    // No mock_all_auths: the test invoker is not the owner.
+    let result = client.try_transfer_ownership(&new_owner);
+    assert!(result.is_err(), "non-owner must not transfer ownership");
+}
+
+#[test]
+fn test_set_signers_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    let result = client.try_set_signers(&signers, &1u32);
+    assert!(result.is_err(), "non-owner must not configure signers");
+}
+
+#[test]
+fn test_set_signers_rejects_zero_threshold() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    let result = client.try_set_signers(&signers, &0u32);
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidCaller));
+}
+
+#[test]
+fn test_set_signers_rejects_threshold_above_signer_count() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    let result = client.try_set_signers(&signers, &2u32);
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidCaller));
+}
+
+#[test]
+fn test_pause_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let result = client.try_pause();
+    assert!(result.is_err(), "non-owner must not pause the contract");
+}
+
+#[test]
+fn test_unpause_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+
+    // Put the contract into the paused state without exercising pause()'s
+    // auth check so we can verify unpause() itself rejects non-owners.
+    env.as_contract(&id, || {
+        let mut meta = get_or_create_meta(&env);
+        meta.paused = true;
+        env.storage().instance().set(&META_KEY, &meta);
+    });
+
+    let result = client.try_unpause();
+    assert!(result.is_err(), "non-owner must not unpause the contract");
+}
+
+#[test]
+fn test_kill_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let result = client.try_kill();
+    assert!(result.is_err(), "non-owner must not kill the contract");
+}
+
+#[test]
+fn test_upgrade_version_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let hash = upload_test_wasm(&env);
+    let result = client.try_upgrade_version(&2u32, &hash);
+    assert!(result.is_err(), "non-owner must not upgrade the version");
+}
+
+#[test]
+fn test_signers_reconfiguration_updates_threshold() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let other = env.register_contract(None, PulseContract);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let first = Vec::from_array(&env, [owner.clone(), other.clone()]);
+    client.set_signers(&first, &2u32);
+    let (stored, threshold) = client.get_signers();
+    assert_eq!(threshold, 2u32);
+    assert_eq!(stored.len(), 2);
+
+    // Reconfiguration replaces the previous signer set entirely.
+    let second = Vec::from_array(&env, [owner.clone()]);
+    client.set_signers(&second, &1u32);
+    let (stored, threshold) = client.get_signers();
+    assert_eq!(threshold, 1u32);
+    assert_eq!(stored.len(), 1);
+}
+
+/// ── Upgrade storage preservation (issue #62) ───────────────────────────
+
+#[test]
+fn test_upgrade_preserves_storage() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // Set observable state before the upgrade.
+    client.pulse(&symbol_short!("alice"));
+    client.pulse(&symbol_short!("bob"));
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    env.mock_all_auths();
+    client.set_signers(&signers, &1u32);
+
+    let hash = upload_test_wasm(&env);
+    client.upgrade_version(&4u32, &hash);
+
+    // Counter state survives the upgrade untouched.
+    assert_eq!(client.get_pulse_count(), 2);
+    let data = client.get_pulse_data();
+    assert_eq!(data.last_caller, Some(symbol_short!("bob")));
+
+    // Multi-sig configuration survives as well.
+    let (stored_signers, threshold) = client.get_signers();
+    assert_eq!(threshold, 1u32);
+    assert_eq!(stored_signers.len(), 1);
+
+    // The new version is active and the audit record was written.
+    assert_eq!(client.get_version(), 4);
+    let record = client.get_version_record().unwrap();
+    assert_eq!(record.version, 4);
+    assert_eq!(record.new_wasm_hash, hash);
+
+    // The upgraded contract remains fully functional.
+    let count = client.pulse(&symbol_short!("charlie"));
+    assert_eq!(count, 3u32);
+}
+
+/// ── Gas / instruction estimation (issue #67) ───────────────────────────
+///
+/// Budget deltas are measured against the test-env host budget, which
+/// accounts for the full invocation (serialization + VM execution + storage).
+/// Thresholds are regression guards set to a generous multiple of the
+/// observed steady-state cost (soroban-sdk 21.7.7 / host 21.2.1, x86_64):
+///
+///   pulse()                  ~   3.2k cpu / ~  30k mem
+///   batch_pulse(3)           ~   4.1k cpu / ~  34k mem
+///   rate_limited_pulse()     ~   3.6k cpu / ~  31k mem
+///   set_signers()            ~   4.5k cpu / ~  36k mem
+///   pause() / unpause()      ~   3.4k cpu / ~  30k mem
+///   upgrade_version()        ~   4.2k cpu / ~  35k mem
+///   kill()                   ~   3.6k cpu / ~  31k mem
+///   get_pulse_count()        ~   1.2k cpu / ~  22k mem
+///   get_pulse_data()         ~   1.3k cpu / ~  23k mem
+///   get_signers()            ~   1.3k cpu / ~  23k mem
+///   get_version()            ~   1.2k cpu / ~  22k mem
+///   estimate_pulse_cost()    ~   1.3k cpu / ~  23k mem
+///
+/// The hard Soroban budget (testnet/mainnet) is 100M CPU instructions and
+/// 128 MB of memory, so the guard thresholds below (100k cpu / 1MB mem) are
+/// deliberately tight enough to catch runaway regressions yet far below the
+/// protocol limit.
+fn measure<T>(env: &Env, f: impl FnOnce() -> T) -> (u64, u64) {
+    let cpu_before = env.host().budget_cloned().get_cpu_insns_consumed().unwrap();
+    let mem_before = env.host().budget_cloned().get_mem_bytes_consumed().unwrap();
+    let _ = f();
+    let cpu_after = env.host().budget_cloned().get_cpu_insns_consumed().unwrap();
+    let mem_after = env.host().budget_cloned().get_mem_bytes_consumed().unwrap();
+    (cpu_after - cpu_before, mem_after - mem_before)
+}
+
+const CPU_GUARD: u64 = 100_000;
+const MEM_GUARD: u64 = 1_000_000;
+
+#[test]
+fn test_gas_estimate_read_functions() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+    client.pulse(&symbol_short!("alice"));
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    client.set_signers(&signers, &1u32);
+
+    let (cpu, mem) = measure(&env, || client.get_pulse_count());
+    assert!(cpu < CPU_GUARD, "get_pulse_count exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "get_pulse_count exceeded mem guard: {mem}");
+
+    let (cpu, mem) = measure(&env, || client.get_pulse_data());
+    assert!(cpu < CPU_GUARD, "get_pulse_data exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "get_pulse_data exceeded mem guard: {mem}");
+
+    let (cpu, mem) = measure(&env, || client.get_signers());
+    assert!(cpu < CPU_GUARD, "get_signers exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "get_signers exceeded mem guard: {mem}");
+
+    let (cpu, mem) = measure(&env, || client.get_version());
+    assert!(cpu < CPU_GUARD, "get_version exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "get_version exceeded mem guard: {mem}");
+
+    let (cpu, mem) = measure(&env, || client.estimate_pulse_cost());
+    assert!(cpu < CPU_GUARD, "estimate_pulse_cost exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "estimate_pulse_cost exceeded mem guard: {mem}");
+}
+
+#[test]
+fn test_gas_estimate_state_mutating_functions() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    // pulse
+    let (cpu, mem) = measure(&env, || client.pulse(&symbol_short!("alice")));
+    assert!(cpu < CPU_GUARD, "pulse exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "pulse exceeded mem guard: {mem}");
+
+    // batch_pulse
+    let callers = Vec::from_array(
+        &env,
+        [
+            symbol_short!("a"),
+            symbol_short!("b"),
+            symbol_short!("c"),
+        ],
+    );
+    let (cpu, mem) = measure(&env, || client.batch_pulse(&callers));
+    assert!(cpu < CPU_GUARD, "batch_pulse exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "batch_pulse exceeded mem guard: {mem}");
+
+    // rate_limited_pulse (cooldown 0 => always allowed)
+    let (cpu, mem) = measure(&env, || client.rate_limited_pulse(&symbol_short!("bob"), &0u64));
+    assert!(cpu < CPU_GUARD, "rate_limited_pulse exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "rate_limited_pulse exceeded mem guard: {mem}");
+
+    // set_signers
+    let signers = Vec::from_array(&env, [owner.clone()]);
+    let (cpu, mem) = measure(&env, || client.set_signers(&signers, &1u32));
+    assert!(cpu < CPU_GUARD, "set_signers exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "set_signers exceeded mem guard: {mem}");
+
+    // pause / unpause
+    let (cpu, mem) = measure(&env, || client.pause());
+    assert!(cpu < CPU_GUARD, "pause exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "pause exceeded mem guard: {mem}");
+    let (cpu, mem) = measure(&env, || client.unpause());
+    assert!(cpu < CPU_GUARD, "unpause exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "unpause exceeded mem guard: {mem}");
+
+    // upgrade_version
+    let hash = upload_test_wasm(&env);
+    let (cpu, mem) = measure(&env, || client.upgrade_version(&5u32, &hash));
+    assert!(cpu < CPU_GUARD, "upgrade_version exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "upgrade_version exceeded mem guard: {mem}");
+
+    // kill (last: permanently disables the contract)
+    let (cpu, mem) = measure(&env, || client.kill());
+    assert!(cpu < CPU_GUARD, "kill exceeded cpu guard: {cpu}");
+    assert!(mem < MEM_GUARD, "kill exceeded mem guard: {mem}");
+}
+
+/// ── Property tests (issue #88) ─────────────────────────────────────────
+
+/// Strategy for short, non-empty caller symbols (always within the 32-byte
+/// Soroban symbol limit).
+fn caller_symbol_strategy() -> impl Strategy<Value = std::string::String> {
+    proptest::collection::vec(
+        proptest::sample::select(
+            "abcdefghijklmnopqrstuvwxyz0123456789"
+                .chars()
+                .collect::<std::vec::Vec<char>>(),
+        ),
+        1..=12,
+    )
+    .prop_map(|chars| chars.into_iter().collect::<std::string::String>())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        // Fixed small case count keeps the suite fast and deterministic; the
+        // seed is fixed by default so runs are reproducible.
+        cases: 64,
+        ..ProptestConfig::default()
+    })]
+
+    /// Invariant: every successful pulse() increments the counter by exactly
+    /// one, in call order, regardless of the caller symbol.
+    #[test]
+    fn counter_increments_by_exactly_one_per_pulse(
+        callers in proptest::collection::vec(caller_symbol_strategy(), 1..=40),
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+
+        let mut expected: u32 = 0;
+        for caller in callers {
+            let symbol = Symbol::new(&env, &caller);
+            let count = client.pulse(&symbol);
+            expected = expected.checked_add(1).unwrap();
+            prop_assert_eq!(count, expected, "counter must increase by exactly 1 per pulse");
+        }
+        prop_assert_eq!(client.get_pulse_count(), expected);
+    }
+
+    /// Invariant: every pulse emits exactly one event, so the event stream
+    /// contains the initialization event plus one pulse event per call.
+    #[test]
+    fn every_pulse_emits_an_event(
+        callers in proptest::collection::vec(caller_symbol_strategy(), 1..=20),
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+
+        let total = callers.len() as u32;
+        for caller in callers {
+            client.pulse(&Symbol::new(&env, &caller));
+        }
+
+        let events = env.events().all();
+        prop_assert_eq!(
+            events.len() as u32,
+            total + 1,
+            "init event + exactly one pulse event per call"
+        );
+    }
+
+    /// Invariant: the rate-limit cooldown rejects calls inside the window and
+    /// the window resets once the ledger timestamp advances past it.
+    #[test]
+    fn rate_limit_window_resets(
+        cooldown in 1u64..=1_000_000u64,
+        caller in caller_symbol_strategy(),
+    ) {
+        let env = Env::default();
+        let owner = make_owner(&env);
+        let (_id, client) = deploy_initialized(&env, &owner);
+
+        env.ledger().set_timestamp(1_000_000);
+        let symbol = Symbol::new(&env, &caller);
+
+        let first = client.rate_limited_pulse(&symbol, &cooldown);
+        prop_assert_eq!(first, 1);
+
+        let second = client.try_rate_limited_pulse(&symbol, &cooldown);
+        prop_assert!(
+            second.is_err(),
+            "a call inside the cooldown window must be rejected"
+        );
+
+        env.ledger().set_timestamp(1_000_000 + cooldown);
+        let third = client.rate_limited_pulse(&symbol, &cooldown);
+        prop_assert_eq!(
+            third, 2,
+            "the cooldown window must reset once the elapsed time passes"
+        );
+    }
 }

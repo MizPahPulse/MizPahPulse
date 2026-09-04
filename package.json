@@ -19,6 +19,7 @@
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",
     "db:seed": "turbo run db:seed",
+    "db:reset": "turbo run db:reset",
     "db:studio": "turbo run db:studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

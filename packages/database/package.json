@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
+    "db:reset": "prisma migrate reset --force --skip-seed && npm run db:seed",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "clean": "rm -rf dist node_modules"
