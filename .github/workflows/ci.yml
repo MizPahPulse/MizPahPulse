@@ -90,6 +90,13 @@ jobs:
       - name: Run tests
         run: npx turbo run test
 
+      - name: Enforce web coverage thresholds
+        # Coverage thresholds are defined in apps/web/vitest.config.ts and
+        # scoped to src/lib/** (the unit-tested logic layer). Fails the build
+        # when coverage drops below the configured floor.
+        run: npx vitest run --coverage
+        working-directory: apps/web
+
   # ──────────────────────────────────────
   # Build
   # ──────────────────────────────────────
