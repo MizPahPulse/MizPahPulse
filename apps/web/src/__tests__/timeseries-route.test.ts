@@ -12,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
   event: {
     findMany: vi.fn(),
   },
+  dailyStat: {
+    findMany: vi.fn(),
+  },
 }));
 
 vi.mock('@mizpah-pulse/database', () => ({
@@ -41,6 +44,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   await loadRoute();
   prismaMock.event.findMany.mockResolvedValue([]);
+  prismaMock.dailyStat.findMany.mockResolvedValue([]);
   rateLimitMock.mockResolvedValue({ limited: false, headers: {}, response: null });
   requireApiKeyMock.mockResolvedValue({ response: null });
   // Fixed "now" for deterministic bucket boundaries.
@@ -105,6 +109,50 @@ describe('GET /api/v1/stats/timeseries', () => {
     expect(body.data.range).toBe('7d');
     expect(body.data.buckets.length).toBeGreaterThanOrEqual(7);
     expect(body.data.buckets[0].label).toMatch(/[A-Z][a-z]{2} \d{1,2}/);
+  });
+
+  it('prefers DailyStat rows for day granularity (issue #47)', async () => {
+    // Rolled-up stats for Sep 3; raw events include Sep 3 (must not double
+    // count) and today Sep 4 (not yet rolled up, must still appear).
+    prismaMock.dailyStat.findMany.mockResolvedValue([
+      { date: new Date('2026-09-03T00:00:00.000Z'), category: 'PAYMENT', count: 40 },
+      { date: new Date('2026-09-03T00:00:00.000Z'), category: 'DEX', count: 10 },
+    ]);
+    prismaMock.event.findMany.mockResolvedValue([
+      { timestamp: new Date('2026-09-03T12:00:00.000Z'), category: 'PAYMENT' },
+      { timestamp: new Date('2026-09-04T09:00:00.000Z'), category: 'CONTRACT' },
+    ]);
+
+    const res = await timeseriesRequest('?granularity=day&range=7d');
+    const body = await res.json();
+
+    // Sep 3 bucket reflects the rolled-up totals, not the raw event.
+    const sep3 = body.data.buckets.find((b: { start: string }) => b.start.startsWith('2026-09-03'));
+    expect(sep3.counts.PAYMENT).toBe(40);
+    expect(sep3.counts.DEX).toBe(10);
+    expect(sep3.counts.CONTRACT).toBe(0);
+    expect(sep3.total).toBe(50);
+
+    // Today's bucket still counts raw events (no rollup yet).
+    const sep4 = body.data.buckets.find((b: { start: string }) => b.start.startsWith('2026-09-04'));
+    expect(sep4.counts.CONTRACT).toBe(1);
+    expect(sep4.total).toBe(1);
+  });
+
+  it('falls back to raw events when no DailyStat rows exist (issue #47)', async () => {
+    prismaMock.dailyStat.findMany.mockResolvedValue([]);
+    prismaMock.event.findMany.mockResolvedValue([
+      { timestamp: new Date('2026-09-04T09:00:00.000Z'), category: 'PAYMENT' },
+      { timestamp: new Date('2026-09-03T09:00:00.000Z'), category: 'DEX' },
+    ]);
+
+    const res = await timeseriesRequest('?granularity=day&range=7d');
+    const body = await res.json();
+
+    const sep4 = body.data.buckets.find((b: { start: string }) => b.start.startsWith('2026-09-04'));
+    expect(sep4.counts.PAYMENT).toBe(1);
+    const sep3 = body.data.buckets.find((b: { start: string }) => b.start.startsWith('2026-09-03'));
+    expect(sep3.counts.DEX).toBe(1);
   });
 
   it('rejects invalid granularity and range values', async () => {

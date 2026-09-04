@@ -328,6 +328,45 @@ impl PulseContract {
             .unwrap_or((Vec::new(&env), 0))
     }
 
+    /// ── Emergency Multi-Sig Override (issue #58) ─
+
+    /// Pause the contract through the multi-sig override.
+    ///
+    /// Unlike the owner-only `pause()`, this path is gated by the configured
+    /// signer threshold: the first `threshold` addresses of the signer set
+    /// must authorize (M-of-N over the configured committee). This gives the
+    /// signer committee an independent emergency brake that does not depend
+    /// on the single owner key. Emits a distinct `emergency/paused` topic.
+    pub fn emergency_pause(env: Env) -> Result<(), PulseError> {
+        require_signer_threshold(&env)?;
+
+        let mut meta = get_or_create_meta(&env);
+        meta.paused = true;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events()
+            .publish((symbol_short!("emergency"), symbol_short!("paused")), ());
+        log!(&env, "Contract emergency-paused by signer committee");
+        Ok(())
+    }
+
+    /// Lift an emergency pause (multi-sig override, issue #58).
+    ///
+    /// Requires the same signer threshold as `emergency_pause` and emits a
+    /// distinct `emergency/resumed` topic.
+    pub fn emergency_resume(env: Env) -> Result<(), PulseError> {
+        require_signer_threshold(&env)?;
+
+        let mut meta = get_or_create_meta(&env);
+        meta.paused = false;
+        env.storage().instance().set(&META_KEY, &meta);
+
+        env.events()
+            .publish((symbol_short!("emergency"), symbol_short!("resumed")), ());
+        log!(&env, "Emergency pause lifted by signer committee");
+        Ok(())
+    }
+
     /// ── Emergency Kill Switch ─────────────────
 
     /// Permanently disable the contract (canonical kill switch).
@@ -711,6 +750,26 @@ impl PulseContract {
 /// ──────────────────────────────────────────────
 /// Internal Helpers
 /// ──────────────────────────────────────────────
+
+/// Multi-sig gate (issue #58): the first `threshold` configured signers must
+/// authorize. Fails with `InvalidCaller` when no multi-sig configuration
+/// exists (threshold unset or exceeding the signer set size).
+fn require_signer_threshold(env: &Env) -> Result<(), PulseError> {
+    let (signers, threshold) = env
+        .storage()
+        .instance()
+        .get::<Symbol, (Vec<Address>, u32)>(&MULTISIG_KEY)
+        .unwrap_or((Vec::new(env), 0));
+
+    if threshold == 0 || threshold > signers.len() as u32 {
+        return Err(PulseError::InvalidCaller);
+    }
+
+    for i in 0..threshold {
+        signers.get(i).unwrap().require_auth();
+    }
+    Ok(())
+}
 
 /// Read the configured pulse cap, defaulting to `u32::MAX` (unlimited).
 fn pulse_cap(env: &Env) -> u32 {
