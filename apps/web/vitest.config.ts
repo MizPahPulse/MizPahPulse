@@ -9,6 +9,18 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      // Enforce coverage on the core logic layer (server/shared utilities) that
+      // the unit suite owns. UI pages, API route glue, and React components are
+      // intentionally excluded — they are exercised by component/e2e tests.
+      // Thresholds must be kept in sync with CI: see `.github/workflows/ci.yml`.
+      include: ['src/lib/**'],
+      all: true,
+      thresholds: {
+        statements: 65,
+        branches: 80,
+        functions: 75,
+        lines: 65,
+      },
       exclude: ['node_modules/', '.next/', '**/*.d.ts', '**/*.config.*'],
     },
     testTimeout: 10000,
