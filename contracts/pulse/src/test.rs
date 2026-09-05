@@ -439,6 +439,45 @@ fn test_set_signers() {
 }
 
 #[test]
+fn test_get_signers_returns_configured_addresses() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let signer_a = fresh_address(&env);
+    let signer_b = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let signers = Vec::from_array(&env, [signer_a.clone(), signer_b.clone()]);
+    client.set_signers(&signers, &2u32);
+
+    let (stored_signers, threshold) = client.get_signers();
+    assert_eq!(threshold, 2u32);
+    assert_eq!(stored_signers.len(), 2);
+
+    // Every configured signer must be present in the returned set, not just
+    // a matching count (issue #56).
+    assert!(
+        stored_signers.iter().any(|s| s == signer_a),
+        "signer A must be present in the returned signer list"
+    );
+    assert!(
+        stored_signers.iter().any(|s| s == signer_b),
+        "signer B must be present in the returned signer list"
+    );
+}
+
+#[test]
+fn test_get_signers_defaults_to_empty_before_configuration() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let (stored_signers, threshold) = client.get_signers();
+    assert_eq!(threshold, 0u32);
+    assert_eq!(stored_signers.len(), 0);
+}
+
+#[test]
 fn test_rate_limited_pulse_with_cooldown() {
     let env = Env::default();
     let owner = make_owner(&env);
