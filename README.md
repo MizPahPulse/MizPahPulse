@@ -463,6 +463,25 @@ Every contract operation additionally carries host-budget gas guards. See
 
 The full suite also runs as a **weekly regression** (Mondays) via a scheduled trigger on `ci.yml`.
 
+### 🛡 Branch protection (`main`)
+
+`main` is a **protected branch** — nothing lands on it except through a pull request that passes the full gate. Protection is enforced at the GitHub level (Settings → Branches):
+
+| Rule | Setting |
+|---|---|
+| **Required status checks** | `Lint & Typecheck`, `Test`, `Build`, `Smart Contract`, `Playwright e2e`, `Lighthouse performance budgets`, `npm audit`, `cargo audit`, `Analyze` (CodeQL), `TruffleHog secret scan` |
+| **Branches up to date** | ✅ Strict — a PR must be rebased on the latest `main` before merging |
+| **Required reviews** | 1 approving review (admins exempt) |
+| **Conversation resolution** | ✅ All PR comments must be resolved before merge |
+| **Force pushes** | ❌ Blocked |
+| **Deletions** | ❌ Blocked |
+
+Consequences to know when contributing:
+
+- **Direct pushes to `main` are rejected** — open a PR from a feature branch instead; the full pipeline above runs on it automatically.
+- Main-only jobs (`Docker Build`, `Contract WASM Reproducibility`, `Deploy Contract`) run **after** the merge, on `main` itself — they are not PR requirements.
+- The dependency bot (Dependabot) also goes through this gate: grouped patch/minor PRs are auto-approved and auto-merged when the required checks pass.
+
 ---
 
 ## 📸 Screenshots
