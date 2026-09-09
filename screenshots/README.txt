@@ -1,6 +1,21 @@
 Place screenshots here for the README:
 
-1. wallet-connected.png   — Wallets page with Freighter connected
-2. balance-displayed.png   — XLM balance card with amount
-3. successful-transaction.png — Transaction Sent success modal
-4. transaction-result.png  — Transaction hash with explorer link
+Desktop (1440×900):
+1. 01-landing.png          — Landing page
+2. 02-dashboard.png        — Real-time dashboard with live feed
+3. 03-wallet-options.png   — Wallets page with Freighter connected
+4. 04-contracts.png        — Contract explorer
+5. 05-live-feed.png        — Live event feed
+6. 06-analytics.png        — Analytics suite
+
+Mobile (375×812):
+7. 07-mobile-dashboard.png — Dashboard on mobile
+8. 08-mobile-wallets.png   — Wallets page on mobile
+
+All screenshots are captured against the live deploy with
+scripts/capture-screenshots.mjs (Playwright; a Freighter v3 stub makes the
+wallet connect flow resolve with a real funded Testnet account):
+
+  BASE_URL=https://mizpah-pulse.vercel.app node scripts/capture-screenshots.mjs
+
+Demo video: demo-video.mp4 — 2-minute walkthrough of the entire platform.

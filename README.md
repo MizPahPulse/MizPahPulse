@@ -9,17 +9,54 @@
   <a href="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml"><img src="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg" alt="CI/CD" /></a>
   <a href="https://mizpah-pulse.vercel.app"><img src="https://img.shields.io/badge/demo-live-22c55e?style=flat&logo=vercel" alt="Live Demo" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="#tests"><img src="https://img.shields.io/badge/tests-525%2F525%20passed-brightgreen" alt="Tests: 525/525" /></a>
-  <a href="#testing"><img src="https://img.shields.io/badge/coverage-84-99%25%20(CI%20enforced)-22c55e" alt="Coverage: 84-99% (CI-enforced)" /></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/tests-526%2F526%20passed-brightgreen" alt="Tests: 526/526" /></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/coverage-83.9%25%20%2F%2098.7%25%20lines%20(CI%20enforced)-22c55e" alt="Coverage: 83.9% / 98.7% lines (CI-enforced)" /></a>
+  <img src="https://img.shields.io/badge/realtime-WebSocket%20%2B%20SSE-0ea5e9" alt="Realtime: WebSocket + SSE" />
+  <img src="https://img.shields.io/badge/webhooks-HMAC%20signed-0ea5e9" alt="Webhooks: HMAC signed" />
   <a href="contracts/README.md#gas-benchmark"><img src="https://img.shields.io/badge/gas-optimized-22c55e" alt="Gas optimized" /></a>
   <img src="https://img.shields.io/badge/wasm-64%20KB-7B5BDB?logo=stellar" alt="WASM: 64 KB" />
-  <a href="contracts/README.md"><img src="https://img.shields.io/badge/error%20codes-365-7B5BDB" alt="Error codes: 365" /></a>
+  <a href="contracts/ERRORS.md"><img src="https://img.shields.io/badge/error%20codes-365-7B5BDB" alt="Error codes: 365" /></a>
   <img src="https://img.shields.io/badge/next.js-15-black?logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/stellar-testnet-7B5BDB?logo=stellar" alt="Stellar Testnet" />
   <img src="https://img.shields.io/badge/soroban-deployed-7B5BDB?logo=stellar" alt="Soroban Deployed" />
   <img src="https://img.shields.io/badge/typescript-5.6-blue?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/rust-1.88-orange?logo=rust" alt="Rust" />
 </p>
+
+<p align="center">
+  <a href="https://mizpah-pulse.vercel.app"><b>🔗 Open Live Demo</b></a> ·
+  <a href="#-architecture"><b>Architecture</b></a> ·
+  <a href="#-api-reference"><b>API Reference</b></a> ·
+  <a href="#-smart-contract"><b>Smart Contract</b></a> ·
+  <a href="./screenshots/demo-video.mp4"><b>▶️ Demo Video</b></a>
+</p>
+
+---
+
+## 🎯 The Pitch in 60 Seconds
+
+**The problem.** The Stellar network never sleeps — every second it processes payments, Soroban contract calls, DEX trades, NFT activity, and account changes. But watching that heartbeat in real time means stitching together Horizon streams, RPC calls, and raw ledgers yourself. There's no single, developer-friendly window into what's happening *right now*.
+
+**The solution.** **MizpahPulse** is a real-time blockchain intelligence platform purpose-built for the **Stellar ecosystem**. An ingester worker consumes the network's event streams, normalizes **35+ event types across 6 categories** (payments, smart contracts, DEX, NFTs, tokens, accounts), and pushes them through a WebSocket server to a live dashboard — backed by a REST API, an analytics suite, a Freighter wallet hub, a Soroban contract explorer with direct invocation, and a configurable webhook engine. All of it running on PostgreSQL + Redis in a Turborepo monorepo.
+
+**The proof.**
+
+| Metric | Value |
+|---|---|
+| 🧪 Tests | **526/526 passing** (399 web · 6 WebSocket · 16 ingester · 1 database · 104 contract) |
+| 📈 Coverage (CI-enforced) | **83.86% lines web** (≥65% floor) · **98.69% lines contract** (≥90% floor) |
+| 🔗 Smart contract | `PulseContract` — audited, gas-benchmarked, **WASM ≈ 64 KB** |
+| 🚨 Error taxonomy | **365 machine-readable error codes** (30 per-class enums) |
+| 📡 Realtime | WebSocket (`ws://`) + SSE streams + BullMQ/Redis pipeline |
+| 🔌 API | **27+ REST endpoints (v1)** + HMAC-signed webhooks with replay + API keys |
+| 🟢 Live | [mizpah-pulse.vercel.app](https://mizpah-pulse.vercel.app) — Stellar Testnet |
+
+**Who it's for:**
+
+- **Developers** — a clean REST API, webhook engine, API-key portal, and SDK examples to build on Stellar activity.
+- **Traders & analysts** — live feed, historical analytics, category breakdowns, and top-contract insights.
+- **Wallet users** — Freighter integration with one-click transactions and live balances.
+- **dApp builders** — the `PulseContract` demonstrates Soroban payment rails, cross-contract calls, and production-grade contract patterns.
 
 ---
 
@@ -37,6 +74,7 @@
 - [Testing](#-testing)
 - [CI/CD](#-cicd)
 - [Screenshots](#-screenshots)
+- [Documentation](#-documentation)
 - [Environment Variables](#-environment-variables)
 - [Credits](#-credits)
 - [License](#-license)
@@ -64,7 +102,7 @@
 - **Analytics Suite** — Historical trends, category breakdowns, top contracts
 - **Wallet Hub** — Freighter integration, XLM balance, one-click transactions
 - **Contract Explorer** — Deployed Soroban contracts with direct invocation UI
-- **REST API (v1)** — 9 endpoints for programmatic access
+- **REST API (v1)** — 27+ endpoints for programmatic access
 - **Webhook Engine** — Configurable event delivery to external services
 - **Developer Portal** — API key management, SDK examples, integration docs
 
@@ -120,6 +158,8 @@ Stellar Network (Horizon SSE + Soroban RPC)
    [Next.js Dashboard] ◄──── Real-time UI ──── [External Clients]
 ```
 
+Architectural decisions are recorded in [`docs/adr/`](docs/adr/) (monorepo layout, Prisma database, WebSocket real-time, rate limiting).
+
 ---
 
 ## 🛠 Tech Stack
@@ -144,7 +184,7 @@ Stellar Network (Horizon SSE + Soroban RPC)
 
 - **Node.js** ≥ 20
 - **Docker** & Docker Compose (for PostgreSQL + Redis)
-- **npm** ≥ 11
+- **npm** ≥ 10
 - **Rust** ≥ 1.88 (for contract development only)
 - [Freighter Browser Extension](https://freighter.app) (for wallet features)
 
@@ -388,7 +428,7 @@ cd contracts && cargo test                # 104 tests
                                           payments, batch tips, allowance tips, property tests,
                                           365-code taxonomy, gas-regression guards, benchmark)
 ✓ Database                     1 passed  (runs in CI with Postgres; skips locally without it)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Total: 526/526 passing (525 passing without Postgres)
 ```
 
@@ -413,6 +453,8 @@ Every contract operation additionally carries host-budget gas guards. See
 | **Test** | Push, PR | Vitest frontend + Rust contract tests |
 | **Build** | Push, PR | Turborepo full build |
 | **Contract** | Push, PR | Cargo test + WASM build + artifact upload |
+| **E2E (Playwright)** | Push, PR | Full browser flow against the built app (mock mode) |
+| **Lighthouse** | Push, PR | Performance, accessibility, SEO audits |
 | **Deploy Contract** | Manual (`workflow_dispatch`) | Deploy WASM to Stellar Testnet |
 | **Docker** | Push to `main` | Multi-service Docker build |
 
@@ -440,6 +482,20 @@ Every contract operation additionally carries host-budget gas guards. See
   <img src="./screenshots/07-mobile-dashboard.png" alt="Mobile Dashboard" width="200" />
   <img src="./screenshots/08-mobile-wallets.png" alt="Mobile Wallets" width="200" />
 </p>
+
+All screenshots are captured against the live deploy with
+[`scripts/capture-screenshots.mjs`](scripts/capture-screenshots.mjs) (Playwright, 1440×900 desktop / 375×812 mobile).
+
+---
+
+## 📚 Documentation
+
+- [`docs/webhooks.md`](docs/webhooks.md) — webhook payloads, `X-Webhook-Signature` format, verification snippets, retry semantics
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records (monorepo, Prisma, WebSocket real-time, rate limiting)
+- [`contracts/README.md`](contracts/README.md) — PulseContract docs + gas benchmark
+- [`contracts/AUDIT.md`](contracts/AUDIT.md) — formal audit report (invariants, findings, threat model)
+- [`contracts/ERRORS.md`](contracts/ERRORS.md) — the 365-code error taxonomy
+- [`contracts/SECURITY.md`](contracts/SECURITY.md) — contract-specific security notes
 
 ---
 
@@ -493,7 +549,7 @@ Built with ❤️ using:
 
 ## 📄 License
 
-MIT © [MizpahPulse](https://github.com/MizPahPulse)
+MIT © [MizpahPulse](https://github.com/MizpahPulse)
 
 ---
 

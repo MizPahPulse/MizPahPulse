@@ -27,6 +27,12 @@
   configuration for high-volume open-source contribution.
 - README badges updated: 525/525 tests (526 with Postgres), 83.9% lines
   coverage (CI-enforced), gas-optimized, 64 KB WASM.
+- README rewritten as a pitch-first document — new 60-second pitch
+  (problem → solution → proof → audience), updated badges (526/526 tests,
+  83.9% web / 98.7% contract coverage, realtime, webhooks), a
+  Documentation section linking `docs/webhooks.md` and `docs/adr/`, and all
+  8 screenshots re-captured against the live deploy via the new
+  `scripts/capture-screenshots.mjs` (Playwright, 1440×900 / 375×812).
 
 ## v0.2.0 - Major Enhancement Release
 
