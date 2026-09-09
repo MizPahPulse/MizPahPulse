@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/MizPahPulse/MizPahPulse/discussions
+    about: Ask questions, share ideas, and chat with maintainers and contributors.
+  - name: 🔐 Security
+    url: https://github.com/MizPahPulse/MizPahPulse/security/policy
+    about: Report a vulnerability. Please do not open a public issue for security bugs.

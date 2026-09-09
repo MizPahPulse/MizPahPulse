@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Smart Contract (PulseContract)
+- **365-code error taxonomy** — machine-readable failure codes split into 30
+  per-class `#[contracterror]` enums (the protocol caps a single enum at 50
+  spec cases); full table in `contracts/ERRORS.md`, uniqueness enforced by test.
+- **More Stellar payment rails** — allowance-based pull tips
+  (`tip_token_from` via SAC `transfer_from`), batch/payroll tips
+  (`batch_tip_token`/`batch_tip_xlm`: N recipients, one pulse, one auth), and
+  SEP-41 metadata reads (`get_token_metadata`).
+- **Configurable native-token rail** — `set_native_token_address` lets the
+  owner re-point `tip_xlm`/`withdraw_xlm`/`get_xlm_balance` (defaults to the
+  well-known XLM SAC); enables full test coverage of the native rail.
+- **Gas benchmark + guards** — release-profile per-operation host-budget
+  benchmark documented in `contracts/README.md`; regression guards fail CI
+  above 100k CPU insns / 1 MB per op. WASM ≈ 64 KB (opt-level z, LTO, strip).
+- **Formal audit report** — `contracts/AUDIT.md` covering invariants, findings,
+  threat model, and gas analysis.
+- **Coverage gates** — contract `lib.rs` at 98.69% lines / 93.75% functions
+  (`llvm-cov`), enforced in CI with a 90% floor; web logic layer at 83.86%
+  lines / 88.97% branches (already CI-enforced).
+
+### Project
+- Issue templates (bug/feature/config), `CODE_OF_CONDUCT.md`, and stale-bot
+  configuration for high-volume open-source contribution.
+- README badges updated: 525/525 tests (526 with Postgres), 83.9% lines
+  coverage (CI-enforced), gas-optimized, 64 KB WASM.
+
 ## v0.2.0 - Major Enhancement Release
 
 ### Frontend (~60 improvements)

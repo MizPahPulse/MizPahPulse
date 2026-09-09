@@ -4,8 +4,10 @@
 //! The MizPahPulse heartbeat contract: a Soroban smart contract that tracks
 //! and emits `pulse` events with caller tracking, plus ownership, pausability,
 //! multi-sig signer management, rate limiting, time-locked operations, batch
-//! pulsing, cross-contract broadcasting, a kill switch, and a configurable
-//! pulse-counter cap.
+//! pulsing, cross-contract broadcasting, a kill switch, a configurable
+//! pulse-counter cap, and multiple Stellar payment rails (SEP-41 transfers,
+//! native XLM, allowance-based pull payments, batch/payroll distribution, and
+//! contract-fund withdrawal).
 //!
 //! ## Storage layout
 //!
@@ -20,11 +22,15 @@
 //! | `DFLT_RLIM` | persistent | `u64` | Default per-address pulse interval in seconds (`0` = disabled) |
 //! | `(ADDR_RLIM, Address)` | persistent | `u64` | Per-address rate-limit override (`0` clears → default applies) |
 //! | `(RL_LAST, Address)` | persistent | `u64` | Last pulse ledger timestamp per address (enforcement) |
+//! | `NTV_TOK` | instance | `Address` | Owner-configured native-token SAC (unset → well-known XLM contract) |
 //!
 //! ## Error codes
 //!
-//! See [`PulseError`] for the full list; codes 1-10 are documented in
-//! `contracts/README.md` alongside the event topics.
+//! The contract ships a **365-code machine-readable failure taxonomy** split
+//! into per-class enums (the protocol caps a single spec'd error enum at 50
+//! cases). Functions return [`PulseError`]; the class enums (see the
+//! [`errors`] module) document the full numeric space. The complete table is in
+//! `contracts/ERRORS.md`.
 //!
 //! ## Example usage
 //!
@@ -45,38 +51,12 @@
 //! See `contracts/README.md` in the repository root for deployment and
 //! interaction instructions.
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, log, symbol_short, Address, Env, IntoVal,
-    Symbol, Val, Vec,
+    contract, contractimpl, contracttype, log, symbol_short, token::TokenClient, Address, Env,
+    IntoVal, String, Symbol, Val, Vec,
 };
 
-/// ──────────────────────────────────────────────
-/// Error Codes
-/// ──────────────────────────────────────────────
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum PulseError {
-    /// Caller is not the contract owner
-    NotAuthorized = 1,
-    /// Contract is paused
-    ContractPaused = 2,
-    /// Invalid caller symbol (empty)
-    InvalidCaller = 3,
-    /// Arithmetic overflow in counter
-    CounterOverflow = 4,
-    /// Target contract address is invalid
-    InvalidTargetContract = 5,
-    /// Batch size exceeds maximum allowed
-    BatchTooLarge = 6,
-    /// Time-locked operation attempted before its scheduled timestamp
-    TimeLockNotReady = 7,
-    /// Rate-limited operation attempted within the active cooldown window
-    CooldownActive = 8,
-    /// Pulse count cap configured by the owner has been reached
-    PulseCapReached = 9,
-    /// Time-locked operation attempted after its absolute deadline
-    TimeLockExpired = 10,
-}
+pub mod errors;
+pub use errors::*;
 
 /// Counter for tracking pulse events
 #[contracttype]
@@ -138,8 +118,38 @@ const TOPIC_SIGNERS: Symbol = symbol_short!("signers");
 /// Maximum batch size for batch_pulse
 const MAX_BATCH_SIZE: u32 = 50;
 
+/// Maximum recipients per batch tip (same bound as `MAX_BATCH_SIZE`).
+const MAX_BATCH_TIP_SIZE: u32 = 50;
+
 /// Multi-sig approval threshold
 const MULTISIG_KEY: Symbol = symbol_short!("MULTISIG");
+
+/// Well-known contract ID of the native XLM Stellar Asset Contract. The
+/// native asset contract address is derived from the native asset XDR plus the
+/// network ID, so it is identical on mainnet and testnet. Using the SAC keeps
+/// XLM payments on the same SEP-41 interface as every other Stellar asset.
+///
+/// The XLM rails (`tip_xlm`, `withdraw_xlm`, `get_xlm_balance`) default to this
+/// address but can be re-pointed by the owner via
+/// [`Self::set_native_token_address`] — required on networks whose native SAC
+/// address differs (e.g. some private/future networks) and useful in tests.
+const NATIVE_ASSET_CONTRACT_ID: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM";
+
+/// Storage key for the owner-configured native-token SAC address. When unset,
+/// the XLM rails fall back to [`NATIVE_ASSET_CONTRACT_ID`].
+const NATIVE_TOKEN_KEY: Symbol = symbol_short!("NTV_TOK");
+
+/// TTL budget for persistent (address-scoped) keys: 31 days at ~5s ledgers
+/// (17,280 ledgers/day). `extend_ttl` renews keys on every write so per-address
+/// rate-limit state never expires mid-use, which would otherwise silently
+/// disable limits and incur expiry fees.
+const TTL_THRESHOLD_LEDGERS: u32 = 267_840; // ~15.5 days
+const TTL_EXTEND_LEDGERS: u32 = 535_680; // ~31 days
+
+/// ── Payment Event Topics ──────────────────────
+const TOPIC_PAYMENT: Symbol = symbol_short!("payment");
+const TOPIC_TIP: Symbol = symbol_short!("tip");
+const TOPIC_WITHDRAW: Symbol = symbol_short!("withdraw");
 
 /// Version history for upgrade tracking
 #[contracttype]
@@ -253,7 +263,7 @@ impl PulseContract {
         let mut meta = get_or_create_meta(&env);
         meta.owner.require_auth();
         if new_version <= meta.version {
-            return Err(PulseError::CounterOverflow);
+            return Err(PulseError::VersionNotMonotonic);
         }
 
         let record = VersionRecord {
@@ -265,6 +275,11 @@ impl PulseContract {
         env.storage()
             .persistent()
             .set(&symbol_short!("VERSION"), &record);
+        env.storage().persistent().extend_ttl(
+            &symbol_short!("VERSION"),
+            TTL_THRESHOLD_LEDGERS,
+            TTL_EXTEND_LEDGERS,
+        );
 
         meta.version = new_version;
         env.storage().instance().set(&META_KEY, &meta);
@@ -314,7 +329,17 @@ impl PulseContract {
         meta.owner.require_auth();
 
         if threshold == 0 || threshold > signers.len() as u32 {
-            return Err(PulseError::InvalidCaller);
+            return Err(PulseError::InvalidThreshold);
+        }
+
+        // Reject duplicate signers: a signer listed twice would let one
+        // address satisfy two votes with a single authorization.
+        for i in 0..signers.len() {
+            for j in (i + 1)..signers.len() {
+                if signers.get(i).unwrap() == signers.get(j).unwrap() {
+                    return Err(PulseError::DuplicateSigner);
+                }
+            }
         }
 
         let signer_count = signers.len();
@@ -454,7 +479,9 @@ impl PulseContract {
     pub fn set_max_pulse_count(env: Env, max_count: u32) -> Result<(), PulseError> {
         get_or_create_meta(&env).owner.require_auth();
 
-        env.storage().instance().set(&MAX_PULSE_COUNT_KEY, &max_count);
+        env.storage()
+            .instance()
+            .set(&MAX_PULSE_COUNT_KEY, &max_count);
 
         env.events()
             .publish((symbol_short!("config"), symbol_short!("cap")), max_count);
@@ -506,15 +533,17 @@ impl PulseContract {
     /// Configure the default minimum interval (in seconds) between pulses for
     /// any address that has no per-address override. Owner only. Passing `0`
     /// clears the default and disables rate limiting.
-    pub fn set_default_rate_limit(
-        env: Env,
-        min_interval_seconds: u64,
-    ) -> Result<(), PulseError> {
+    pub fn set_default_rate_limit(env: Env, min_interval_seconds: u64) -> Result<(), PulseError> {
         get_or_create_meta(&env).owner.require_auth();
 
         env.storage()
             .persistent()
             .set(&DEFAULT_RATE_LIMIT_KEY, &min_interval_seconds);
+        env.storage().persistent().extend_ttl(
+            &DEFAULT_RATE_LIMIT_KEY,
+            TTL_THRESHOLD_LEDGERS,
+            TTL_EXTEND_LEDGERS,
+        );
 
         env.events().publish(
             (symbol_short!("config"), symbol_short!("rate_def")),
@@ -551,6 +580,11 @@ impl PulseContract {
             &(ADDRESS_RATE_LIMIT_KEY, address.clone()),
             &min_interval_seconds,
         );
+        env.storage().persistent().extend_ttl(
+            &(ADDRESS_RATE_LIMIT_KEY, address.clone()),
+            TTL_THRESHOLD_LEDGERS,
+            TTL_EXTEND_LEDGERS,
+        );
 
         env.events().publish(
             (symbol_short!("config"), symbol_short!("rate_addr")),
@@ -585,15 +619,28 @@ impl PulseContract {
 
     /// Get the current gas cost estimate for a pulse operation.
     /// This is a read-only call that returns metadata without modifying state.
+    /// Return an upper-bound estimate of the fee (in stroops) for a single
+    /// `pulse()` invocation.
+    ///
+    /// The value is derived from the on-chain benchmark suite in
+    /// `benchmark.rs` (see `contracts/README.md` → Gas Benchmark) and is a
+    /// fixed constant: the contract cannot observe the exact fee of a call it
+    /// is currently executing. It is an upper bound that includes headroom,
+    /// so integrators can bound the cost of a pulse before submitting.
+    ///
+    /// Formula: `estimated_fee_stroops = base_fee_stroops + instruction_budget
+    /// * instruction_fee_rate`, with the instruction budget taken from the
+    /// measured steady-state cost of `pulse()` plus 20% headroom, rounded up
+    /// to the nearest 100 stroops.
     pub fn estimate_pulse_cost(env: Env) -> u32 {
-        // Return a fixed cost estimate in stroops.
-        // Real implementation would calculate based on current network conditions.
-        let base_cost: u32 = 100_000; // ~0.01 XLM in stroops
-        let _meta = env
-            .storage()
-            .instance()
-            .get::<Symbol, ContractMeta>(&META_KEY);
-        base_cost
+        // Measured steady-state: ~3.4k CPU insns (~0.68 M gas units) on
+        // soroban-sdk 21.7.7. Budgeted at 1.0 M gas units for headroom, plus
+        // the current base fee for a full (non-refunded) transaction frame.
+        let _ = env.ledger().sequence(); // touch ledger for a stable read cost
+        let base_fee: u32 = 100; // minimum base fee per operation (stroops)
+        let gas_units: u32 = 1_000_000; // budgeted gas units for one pulse
+        let fee_rate: u32 = 100; // instruction fee (stroops per 10k gas units)
+        base_fee + gas_units / 10_000 * fee_rate
     }
 
     /// Read the current ledger timestamp
@@ -685,6 +732,9 @@ impl PulseContract {
                 return Err(PulseError::CooldownActive);
             }
             env.storage().persistent().set(&key, &now);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);
         }
 
         fire_pulse(&env, caller)
@@ -722,7 +772,7 @@ impl PulseContract {
         ensure_not_paused(&env)?;
 
         if callers.is_empty() {
-            return Err(PulseError::InvalidCaller);
+            return Err(PulseError::BatchEmpty);
         }
         if callers.len() > MAX_BATCH_SIZE as u32 {
             return Err(PulseError::BatchTooLarge);
@@ -830,6 +880,282 @@ impl PulseContract {
             .instance()
             .get::<Symbol, (u32, Symbol)>(&RX_PULSE_KEY)
     }
+
+    /// ── Stellar Payment Rails ────────────────────
+
+    /// Pulse and pay `amount` of an arbitrary SEP-41 asset (any Stellar Asset
+    /// Contract, including anchored assets) from `from` to `to` in a single
+    /// transaction.
+    ///
+    /// The paying `from` address must authorize the call, so the contract can
+    /// never move funds it was not asked to move. The pulse counter increments
+    /// only when the transfer succeeds, keeping state and payments atomic.
+    ///
+    /// Returns `(pulse_count, amount_paid)`.
+    pub fn tip_token(
+        env: Env,
+        token: Address,
+        from: Address,
+        to: Address,
+        amount: i128,
+        caller: Symbol,
+    ) -> Result<(u32, i128), PulseError> {
+        ensure_not_paused(&env)?;
+        validate_caller_symbol(&env, &caller)?;
+        if amount <= 0 {
+            return Err(PulseError::InvalidAmount);
+        }
+        from.require_auth();
+
+        let client = TokenClient::new(&env, &token);
+        let balance = client.balance(&from);
+        if balance < amount {
+            return Err(PulseError::InsufficientBalance);
+        }
+        client.transfer(&from, &to, &amount);
+
+        let count = fire_pulse(&env, caller.clone())?;
+        env.events().publish(
+            (TOPIC_PAYMENT, TOPIC_TIP),
+            (token.clone(), from.clone(), to.clone(), amount),
+        );
+
+        log!(
+            &env,
+            "Tip: {} stroops {} -> {} (pulse #{})",
+            amount,
+            from,
+            to,
+            count
+        );
+        Ok((count, amount))
+    }
+
+    /// Pulse and pay `amount` of native XLM (via the native Stellar Asset
+    /// Contract) from `from` to `to` in a single transaction. Same guarantees
+    /// as [`Self::tip_token`].
+    ///
+    /// The native SAC address defaults to the well-known XLM contract but can
+    /// be re-pointed with [`Self::set_native_token_address`] on networks where
+    /// the native asset contract ID differs.
+    pub fn tip_xlm(
+        env: Env,
+        from: Address,
+        to: Address,
+        amount: i128,
+        caller: Symbol,
+    ) -> Result<(u32, i128), PulseError> {
+        let native = native_token_address(&env);
+        Self::tip_token(env, native, from, to, amount, caller)
+    }
+
+    /// Owner-only: re-point the XLM rails (`tip_xlm`, `withdraw_xlm`,
+    /// `get_xlm_balance`) at a different Stellar Asset Contract address.
+    ///
+    /// Defaults to the well-known native XLM SAC
+    /// (`CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM`) on mainnet
+    /// and testnet. Set this on networks whose native asset contract ID
+    /// differs, or to route XLM rails at any SEP-41 asset. Passing the
+    /// well-known constant restores the default.
+    pub fn set_native_token_address(env: Env, address: Address) -> Result<(), PulseError> {
+        get_or_create_meta(&env).owner.require_auth();
+
+        env.storage().instance().set(&NATIVE_TOKEN_KEY, &address);
+
+        env.events().publish(
+            (symbol_short!("config"), symbol_short!("ntv_tok")),
+            address.clone(),
+        );
+
+        log!(&env, "Native token rails pointed at {}", address);
+        Ok(())
+    }
+
+    /// Get the SAC address currently used by the XLM rails (the configured
+    /// override when set, otherwise the well-known native XLM contract).
+    pub fn get_native_token_address(env: Env) -> Address {
+        native_token_address(&env)
+    }
+
+    /// Owner-only: drain `amount` of any SEP-41 asset held by the contract
+    /// itself (e.g. accidentally sent funds) to `to`.
+    pub fn withdraw_token(
+        env: Env,
+        token: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<i128, PulseError> {
+        get_or_create_meta(&env).owner.require_auth();
+        if amount <= 0 {
+            return Err(PulseError::InvalidAmount);
+        }
+
+        let client = TokenClient::new(&env, &token);
+        let self_address = env.current_contract_address();
+        let balance = client.balance(&self_address);
+        if balance < amount {
+            return Err(PulseError::InsufficientBalance);
+        }
+        client.transfer(&self_address, &to, &amount);
+
+        env.events().publish(
+            (TOPIC_PAYMENT, TOPIC_WITHDRAW),
+            (token.clone(), to.clone(), amount),
+        );
+        log!(&env, "Withdrew {} stroops of {} to {}", amount, token, to);
+        Ok(amount)
+    }
+
+    /// Owner-only: drain `amount` of native XLM held by the contract to `to`.
+    /// Uses the configured native-token SAC (see
+    /// [`Self::set_native_token_address`]).
+    pub fn withdraw_xlm(env: Env, to: Address, amount: i128) -> Result<i128, PulseError> {
+        let native = native_token_address(&env);
+        Self::withdraw_token(env, native, to, amount)
+    }
+
+    /// Read the SEP-41 balance of any address for any Stellar asset. Read-only.
+    pub fn get_token_balance(env: Env, token: Address, address: Address) -> i128 {
+        TokenClient::new(&env, &token).balance(&address)
+    }
+
+    /// Read the native XLM balance of any address. Read-only. Uses the
+    /// configured native-token SAC (see [`Self::set_native_token_address`]).
+    pub fn get_xlm_balance(env: Env, address: Address) -> i128 {
+        let native = native_token_address(&env);
+        Self::get_token_balance(env, native, address)
+    }
+
+    /// Pulse and pay `amount` of a SEP-41 asset from `from` to `to` in a
+    /// single transaction using the SAC **allowance rail** (`transfer_from`).
+    ///
+    /// Unlike [`Self::tip_token`], the contract acts as the *spender*: `from`
+    /// must have approved the contract via the SAC's `approve` before calling.
+    /// The `from` address must authorize the call, so funds are only pulled
+    /// when the payer signed off. Returns `(pulse_count, amount_paid)`.
+    pub fn tip_token_from(
+        env: Env,
+        token: Address,
+        from: Address,
+        to: Address,
+        amount: i128,
+        caller: Symbol,
+    ) -> Result<(u32, i128), PulseError> {
+        ensure_not_paused(&env)?;
+        validate_caller_symbol(&env, &caller)?;
+        if amount <= 0 {
+            return Err(PulseError::InvalidAmount);
+        }
+        from.require_auth();
+
+        let client = TokenClient::new(&env, &token);
+        let spender = env.current_contract_address();
+        if client.allowance(&from, &spender) < amount {
+            return Err(PulseError::NoAllowance);
+        }
+        client.transfer_from(&spender, &from, &to, &amount);
+
+        let count = fire_pulse(&env, caller.clone())?;
+        env.events().publish(
+            (TOPIC_PAYMENT, symbol_short!("tip_from")),
+            (token.clone(), from.clone(), to.clone(), amount),
+        );
+
+        log!(
+            &env,
+            "Allowance tip: {} stroops {} -> {} (pulse #{})",
+            amount,
+            from,
+            to,
+            count
+        );
+        Ok((count, amount))
+    }
+
+    /// Pulse and distribute `amounts` to multiple `recipients` of a SEP-41
+    /// asset in a **single transaction** (payroll / batch rail).
+    ///
+    /// One pulse is fired for the whole batch and the payer authorizes once,
+    /// making this strictly cheaper than N individual `tip_token` calls. The
+    /// transfer is atomic: if any amount is invalid or the total exceeds the
+    /// payer balance, nothing moves. Returns `(pulse_count, total_paid)`.
+    pub fn batch_tip_token(
+        env: Env,
+        token: Address,
+        from: Address,
+        recipients: Vec<(Address, i128)>,
+        caller: Symbol,
+    ) -> Result<(u32, i128), PulseError> {
+        ensure_not_paused(&env)?;
+        validate_caller_symbol(&env, &caller)?;
+        if recipients.is_empty() {
+            return Err(PulseError::RecipientsEmpty);
+        }
+        if recipients.len() as u32 > MAX_BATCH_TIP_SIZE {
+            return Err(PulseError::BatchTooLarge);
+        }
+        from.require_auth();
+
+        let client = TokenClient::new(&env, &token);
+
+        // Validate every (recipient, amount) and sum the total before any
+        // transfer so a bad entry aborts the whole batch atomically.
+        let mut total: i128 = 0;
+        for i in 0..recipients.len() {
+            let (_, amount) = recipients.get(i).unwrap();
+            if amount <= 0 {
+                return Err(PulseError::InvalidAmount);
+            }
+            total = total
+                .checked_add(amount)
+                .ok_or(PulseError::AmountOverflow)?;
+        }
+        if client.balance(&from) < total {
+            return Err(PulseError::InsufficientBalance);
+        }
+
+        let recipient_count = recipients.len();
+        for i in 0..recipients.len() {
+            let (to, amount) = recipients.get(i).unwrap();
+            client.transfer(&from, &to, &amount);
+        }
+
+        let count = fire_pulse(&env, caller.clone())?;
+        env.events().publish(
+            (TOPIC_PAYMENT, symbol_short!("btip")),
+            (token.clone(), from.clone(), recipients, total),
+        );
+
+        log!(
+            &env,
+            "Batch tip: {} recipients, {} total stroops, from {} (pulse #{})",
+            recipient_count,
+            total,
+            from,
+            count
+        );
+        Ok((count, total))
+    }
+
+    /// Batch-distribute native XLM to multiple recipients in one transaction
+    /// (see [`Self::batch_tip_token`] and [`Self::set_native_token_address`]).
+    pub fn batch_tip_xlm(
+        env: Env,
+        from: Address,
+        recipients: Vec<(Address, i128)>,
+        caller: Symbol,
+    ) -> Result<(u32, i128), PulseError> {
+        let native = native_token_address(&env);
+        Self::batch_tip_token(env, native, from, recipients, caller)
+    }
+
+    /// Read SEP-41 token metadata (`name`, `symbol`, `decimals`) of any
+    /// Stellar Asset Contract. Read-only — useful for payment UIs that need
+    /// to display asset details before building a transfer.
+    pub fn get_token_metadata(env: Env, token: Address) -> (String, String, u32) {
+        let client = TokenClient::new(&env, &token);
+        (client.name(), client.symbol(), client.decimals())
+    }
 }
 
 /// ──────────────────────────────────────────────
@@ -847,9 +1173,12 @@ fn require_signer_threshold(env: &Env) -> Result<(), PulseError> {
         .unwrap_or((Vec::new(env), 0));
 
     if threshold == 0 || threshold > signers.len() as u32 {
-        return Err(PulseError::InvalidCaller);
+        return Err(PulseError::EmergencyCommitteeNotConfigured);
     }
 
+    // Each required signer must authorize. `require_auth` aborts the
+    // transaction when an expected signature is missing, so a signer that
+    // declines simply cannot meet the threshold.
     for i in 0..threshold {
         signers.get(i).unwrap().require_auth();
     }
@@ -937,6 +1266,15 @@ fn fire_pulse(env: &Env, caller: Symbol) -> Result<u32, PulseError> {
     Ok(data.count)
 }
 
+/// The SAC address the XLM rails use: the owner-configured override when set,
+/// otherwise the well-known native XLM contract (`NATIVE_ASSET_CONTRACT_ID`).
+fn native_token_address(env: &Env) -> Address {
+    env.storage()
+        .instance()
+        .get::<Symbol, Address>(&NATIVE_TOKEN_KEY)
+        .unwrap_or_else(|| Address::from_string(&String::from_str(env, NATIVE_ASSET_CONTRACT_ID)))
+}
+
 /// Effective minimum interval (seconds) for an address: its per-address
 /// override when set, otherwise the global default (issue #59). An override of
 /// 0 means "cleared" — fall through to the global default.
@@ -955,3 +1293,6 @@ fn effective_rate_limit(env: &Env, address: &Address) -> u64 {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod benchmark;

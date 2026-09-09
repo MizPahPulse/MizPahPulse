@@ -16,7 +16,7 @@ line numbers shift as the crate evolves).
 | 1.2 | Ownership can only be changed by the current owner | `transfer_ownership` calls `meta.owner.require_auth()` before mutating | ✅ |
 | 1.3 | Owner cannot be unset or zeroed | `Address` is non-optional; `initialize` requires a caller-supplied address | ✅ |
 | 1.4 | Multi-sig committee gating for the emergency brake | `emergency_pause` / `emergency_resume` call `require_signer_threshold()`, which requires the first `threshold` addresses of the configured signer set to authorize (M-of-N) | ✅ |
-| 1.5 | Threshold validation on configuration | `set_signers` rejects `threshold == 0` and `threshold > signers.len()` with `PulseError::InvalidCaller` | ✅ |
+| 1.5 | Threshold validation on configuration | `set_signers` rejects `threshold == 0` and `threshold > signers.len()` with `PulseError::InvalidThreshold` (300) | ✅ |
 | 1.6 | Public (unauthenticated) surface is intentional | `pulse`, `batch_pulse`, `rate_limited_pulse`, `time_locked_pulse`, `broadcast_pulse`, `on_pulse_received` and all getters are public by design (a permissionless counter); they mutate only the counter, never ownership/config | ✅ |
 
 ## 2. Initialization & Upgrade Safety
@@ -24,7 +24,7 @@ line numbers shift as the crate evolves).
 | # | Property | Implementation | Status |
 |---|----------|----------------|--------|
 | 2.1 | Contract cannot be re-initialized | `initialize` returns early when `META_KEY` already exists; a second call is a no-op rather than an overwrite | ✅ |
-| 2.2 | Upgrade version must be monotonic | `upgrade_version` rejects `new_version <= meta.version` (`PulseError::CounterOverflow`) | ✅ |
+| 2.2 | Upgrade version must be monotonic | `upgrade_version` rejects `new_version <= meta.version` with `PulseError::VersionNotMonotonic` (700) | ✅ |
 | 2.3 | Upgrade audit trail | `upgrade_version` persists a `VersionRecord` (version, ledger timestamp, new WASM hash) under `VERSION` before updating `META` | ✅ |
 | 2.4 | WASM swap requires an already-uploaded hash | `update_wasm` calls `env.deployer().update_current_contract_wasm(hash)`; an unregistered hash aborts the transaction at the host level | ✅ |
 | 2.5 | Storage preserved across upgrades | `META`, `PULSE`, `MULTISIG`, `MAX_COUNT` live in instance storage, which survives WASM replacement; covered by the `upgrade_preserves_storage` test | ✅ |
@@ -58,7 +58,7 @@ line numbers shift as the crate evolves).
 | # | Property | Implementation | Status |
 |---|----------|----------------|--------|
 | 6.1 | Empty caller symbols rejected | `pulse` rejects `Symbol::new(&env, "")` with `PulseError::InvalidCaller` | ✅ |
-| 6.2 | Batch size bounded | `batch_pulse` rejects empty vectors (`InvalidCaller`) and sizes over `MAX_BATCH_SIZE = 50` (`BatchTooLarge`) | ✅ |
+| 6.2 | Batch size bounded | `batch_pulse` rejects empty vectors (`PulseError::BatchEmpty`, 400) and sizes over `MAX_BATCH_SIZE = 50` (`PulseError::BatchTooLarge`, 6) | ✅ |
 | 6.3 | Time-lock windows validated | `time_locked_pulse` rejects before `execute_after` (`TimeLockNotReady`) and after `execute_before` when set (`TimeLockExpired`) | ✅ |
 
 ## 7. Event Integrity

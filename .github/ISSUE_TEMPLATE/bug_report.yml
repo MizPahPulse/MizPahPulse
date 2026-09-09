@@ -1,0 +1,66 @@
+name: 🐛 Bug report
+description: Report a reproducible bug in MizpahPulse
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please search
+        [existing issues](https://github.com/MizPahPulse/MizPahPulse/issues?q=is%3Aissue)
+        first to avoid duplicates.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal, exact steps to reproduce the behavior.
+      placeholder: |
+        1. Run `...`
+        2. Call `...`
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the platform does this affect?
+      options:
+        - Web dashboard (Next.js)
+        - WebSocket server
+        - Ingester / event pipeline
+        - Database / API
+        - Soroban smart contract
+        - Tooling / CI / docs
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocker (unusable / funds at risk)
+        - High (feature broken, no workaround)
+        - Medium (broken with a workaround)
+        - Low (cosmetic / minor)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error output
+      description: Paste any console output, transaction hashes, or error codes (e.g. PulseError codes).
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node/Rust versions, network (testnet/mainnet/futurenet), browser, Docker vs local, etc.
+    validations:
+      required: true

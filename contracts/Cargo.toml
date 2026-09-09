@@ -9,3 +9,14 @@ soroban-sdk = "21.0.1"
 
 [workspace.metadata]
 stellar-network = "testnet"
+
+# Ultra-low-fee release profile: minimizes the compiled WASM size, which
+# directly reduces contract deployment and upgrade fees (Soros charges per
+# WASM byte). LTO + single codegen unit + opt-level "z" trade compile time
+# for the smallest artifact; `panic = "abort"` drops the unwinder.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

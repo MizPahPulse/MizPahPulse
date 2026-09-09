@@ -6,6 +6,7 @@ use super::*;
 use proptest::prelude::*;
 use soroban_sdk::testutils::Events;
 use soroban_sdk::testutils::Ledger;
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::Env;
 
 /// Extract the primary and secondary topic symbols from every emitted event.
@@ -22,7 +23,9 @@ fn emitted_topic_pairs(env: &Env) -> std::vec::Vec<(Symbol, Option<Symbol>)> {
                 .get(0)
                 .map(|v| Symbol::try_from_val(env, &v).unwrap())
                 .expect("events always carry a primary topic");
-            let secondary = topics.get(1).map(|v| Symbol::try_from_val(env, &v).unwrap());
+            let secondary = topics
+                .get(1)
+                .map(|v| Symbol::try_from_val(env, &v).unwrap());
             (primary, secondary)
         })
         .collect::<std::vec::Vec<_>>()
@@ -521,11 +524,8 @@ fn test_time_locked_pulse_rejects_after_deadline() {
     // execute_after (not-before) has passed, but the absolute deadline
     // (not-after) has also expired — the pulse must be rejected.
     env.ledger().set_timestamp(2_000_000);
-    let result = client.try_time_locked_pulse(
-        &symbol_short!("alice"),
-        &1_000_000u64,
-        &Some(1_500_000u64),
-    );
+    let result =
+        client.try_time_locked_pulse(&symbol_short!("alice"), &1_000_000u64, &Some(1_500_000u64));
     assert_eq!(result.unwrap_err(), Ok(PulseError::TimeLockExpired));
 }
 
@@ -536,11 +536,8 @@ fn test_time_locked_pulse_executes_within_window() {
     let (_id, client) = deploy_initialized(&env, &owner);
 
     env.ledger().set_timestamp(1_250_000);
-    let count = client.time_locked_pulse(
-        &symbol_short!("alice"),
-        &1_000_000u64,
-        &Some(1_500_000u64),
-    );
+    let count =
+        client.time_locked_pulse(&symbol_short!("alice"), &1_000_000u64, &Some(1_500_000u64));
     assert_eq!(count, 1u32);
 }
 
@@ -564,7 +561,10 @@ fn test_set_max_pulse_count_requires_owner() {
     let (_id, client) = deploy_initialized(&env, &owner);
 
     let result = client.try_set_max_pulse_count(&100u32);
-    assert!(result.is_err(), "non-owner must not configure the pulse cap");
+    assert!(
+        result.is_err(),
+        "non-owner must not configure the pulse cap"
+    );
 }
 
 #[test]
@@ -607,19 +607,17 @@ fn test_batch_pulse_respects_cap() {
     env.mock_all_auths();
     client.set_max_pulse_count(&5u32);
 
-    let first = Vec::from_array(&env, [
-        symbol_short!("a"),
-        symbol_short!("b"),
-        symbol_short!("c"),
-    ]);
+    let first = Vec::from_array(
+        &env,
+        [symbol_short!("a"), symbol_short!("b"), symbol_short!("c")],
+    );
     assert_eq!(client.batch_pulse(&first), 3u32);
 
     // The next batch would push the counter past the cap.
-    let second = Vec::from_array(&env, [
-        symbol_short!("d"),
-        symbol_short!("e"),
-        symbol_short!("f"),
-    ]);
+    let second = Vec::from_array(
+        &env,
+        [symbol_short!("d"), symbol_short!("e"), symbol_short!("f")],
+    );
     let result = client.try_batch_pulse(&second);
     assert_eq!(result.unwrap_err(), Ok(PulseError::PulseCapReached));
     assert_eq!(client.get_pulse_count(), 3);
@@ -733,9 +731,9 @@ fn test_set_signers_emits_updated_event() {
 
     let topics = emitted_topic_pairs(&env);
     assert!(
-        topics
-            .iter()
-            .any(|(t0, t1)| t0 == &symbol_short!("signers") && t1 == &Some(symbol_short!("updated"))),
+        topics.iter().any(
+            |(t0, t1)| t0 == &symbol_short!("signers") && t1 == &Some(symbol_short!("updated"))
+        ),
         "set_signers must emit a signers/updated event, got {topics:?}"
     );
 }
@@ -763,13 +761,15 @@ fn test_state_changing_operations_emit_documented_topics() {
     let topics = emitted_topic_pairs(&env);
     let has = |primary: &str, secondary: Option<&str>| {
         topics.iter().any(|(t0, t1)| {
-            t0 == &Symbol::new(&env, primary)
-                && t1 == &secondary.map(|s| Symbol::new(&env, s))
+            t0 == &Symbol::new(&env, primary) && t1 == &secondary.map(|s| Symbol::new(&env, s))
         })
     };
 
     assert!(has("paused", None), "pause must emit the paused topic");
-    assert!(has("unpaused", None), "unpause must emit the unpaused topic");
+    assert!(
+        has("unpaused", None),
+        "unpause must emit the unpaused topic"
+    );
     assert!(
         has("owner_chg", Some("transfer")),
         "transfer_ownership must emit owner_chg/transfer"
@@ -782,10 +782,7 @@ fn test_state_changing_operations_emit_documented_topics() {
         has("upgrade", Some("applied")),
         "upgrade_version must emit upgrade/applied"
     );
-    assert!(
-        has("kill", Some("applied")),
-        "kill must emit kill/applied"
-    );
+    assert!(has("kill", Some("applied")), "kill must emit kill/applied");
 }
 
 /// ── Admin / owner authorization tests (issue #61) ──────────────────────
@@ -822,7 +819,7 @@ fn test_set_signers_rejects_zero_threshold() {
 
     let signers = Vec::from_array(&env, [owner.clone()]);
     let result = client.try_set_signers(&signers, &0u32);
-    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidCaller));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidThreshold));
 }
 
 #[test]
@@ -834,7 +831,7 @@ fn test_set_signers_rejects_threshold_above_signer_count() {
 
     let signers = Vec::from_array(&env, [owner.clone()]);
     let result = client.try_set_signers(&signers, &2u32);
-    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidCaller));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidThreshold));
 }
 
 #[test]
@@ -920,7 +917,10 @@ fn test_emergency_pause_requires_configured_signers() {
     let result = client.try_emergency_pause();
     assert!(result.is_err(), "emergency_pause without signers must fail");
     let result = client.try_emergency_resume();
-    assert!(result.is_err(), "emergency_resume without signers must fail");
+    assert!(
+        result.is_err(),
+        "emergency_resume without signers must fail"
+    );
 }
 
 #[test]
@@ -935,12 +935,17 @@ fn test_emergency_pause_rejects_insufficient_signers() {
     let signer_b = env.register_contract(None, PulseContract);
     env.as_contract(&id, || {
         let signers = Vec::from_array(&env, [signer_a.clone(), signer_b.clone()]);
-        env.storage().instance().set(&MULTISIG_KEY, &(signers, 2u32));
+        env.storage()
+            .instance()
+            .set(&MULTISIG_KEY, &(signers, 2u32));
     });
 
     // The test invoker is not one of the signers → insufficient signers.
     let result = client.try_emergency_pause();
-    assert!(result.is_err(), "emergency_pause without signer auth must fail");
+    assert!(
+        result.is_err(),
+        "emergency_pause without signer auth must fail"
+    );
 }
 
 #[test]
@@ -958,7 +963,10 @@ fn test_emergency_pause_and_resume_with_signer_threshold() {
     client.emergency_pause();
     assert!(client.is_paused());
     let result = client.try_pulse(&symbol_short!("alice"));
-    assert!(result.is_err(), "pulses must be blocked while emergency-paused");
+    assert!(
+        result.is_err(),
+        "pulses must be blocked while emergency-paused"
+    );
 
     // Emergency resume lifts it.
     client.emergency_resume();
@@ -984,13 +992,15 @@ fn test_emergency_override_emits_distinct_event_topics() {
     assert!(
         topics
             .iter()
-            .any(|(t0, t1)| t0 == &symbol_short!("emergency") && t1 == &Some(symbol_short!("paused"))),
+            .any(|(t0, t1)| t0 == &symbol_short!("emergency")
+                && t1 == &Some(symbol_short!("paused"))),
         "emergency_pause must emit emergency/paused, got {topics:?}"
     );
     assert!(
         topics
             .iter()
-            .any(|(t0, t1)| t0 == &symbol_short!("emergency") && t1 == &Some(symbol_short!("resumed"))),
+            .any(|(t0, t1)| t0 == &symbol_short!("emergency")
+                && t1 == &Some(symbol_short!("resumed"))),
         "emergency_resume must emit emergency/resumed, got {topics:?}"
     );
 }
@@ -1097,8 +1107,14 @@ fn test_gas_estimate_read_functions() {
     assert!(mem < MEM_GUARD, "get_version exceeded mem guard: {mem}");
 
     let (cpu, mem) = measure(&env, || client.estimate_pulse_cost());
-    assert!(cpu < CPU_GUARD, "estimate_pulse_cost exceeded cpu guard: {cpu}");
-    assert!(mem < MEM_GUARD, "estimate_pulse_cost exceeded mem guard: {mem}");
+    assert!(
+        cpu < CPU_GUARD,
+        "estimate_pulse_cost exceeded cpu guard: {cpu}"
+    );
+    assert!(
+        mem < MEM_GUARD,
+        "estimate_pulse_cost exceeded mem guard: {mem}"
+    );
 }
 
 #[test]
@@ -1116,20 +1132,24 @@ fn test_gas_estimate_state_mutating_functions() {
     // batch_pulse
     let callers = Vec::from_array(
         &env,
-        [
-            symbol_short!("a"),
-            symbol_short!("b"),
-            symbol_short!("c"),
-        ],
+        [symbol_short!("a"), symbol_short!("b"), symbol_short!("c")],
     );
     let (cpu, mem) = measure(&env, || client.batch_pulse(&callers));
     assert!(cpu < CPU_GUARD, "batch_pulse exceeded cpu guard: {cpu}");
     assert!(mem < MEM_GUARD, "batch_pulse exceeded mem guard: {mem}");
 
     // rate_limited_pulse (cooldown 0 => always allowed)
-    let (cpu, mem) = measure(&env, || client.rate_limited_pulse(&symbol_short!("bob"), &0u64));
-    assert!(cpu < CPU_GUARD, "rate_limited_pulse exceeded cpu guard: {cpu}");
-    assert!(mem < MEM_GUARD, "rate_limited_pulse exceeded mem guard: {mem}");
+    let (cpu, mem) = measure(&env, || {
+        client.rate_limited_pulse(&symbol_short!("bob"), &0u64)
+    });
+    assert!(
+        cpu < CPU_GUARD,
+        "rate_limited_pulse exceeded cpu guard: {cpu}"
+    );
+    assert!(
+        mem < MEM_GUARD,
+        "rate_limited_pulse exceeded mem guard: {mem}"
+    );
 
     // set_signers
     let signers = Vec::from_array(&env, [owner.clone()]);
@@ -1155,6 +1175,120 @@ fn test_gas_estimate_state_mutating_functions() {
     let (cpu, mem) = measure(&env, || client.kill());
     assert!(cpu < CPU_GUARD, "kill exceeded cpu guard: {cpu}");
     assert!(mem < MEM_GUARD, "kill exceeded mem guard: {mem}");
+}
+
+/// ── Error taxonomy (300+ codes) ────────────────────────────────────────
+
+#[test]
+fn test_error_taxonomy_has_300_plus_unique_codes() {
+    use soroban_sdk::Error;
+
+    // (name, probe) pairs — one probe per spec'd enum. Each probe reports
+    // whether its enum owns the given numeric code.
+    macro_rules! add_enum {
+        ($ty:ty) => {{
+            let probe: std::boxed::Box<dyn Fn(u32) -> bool> = std::boxed::Box::new(|code| {
+                <$ty>::try_from(Error::from_contract_error(code)).is_ok()
+            });
+            (stringify!($ty), probe)
+        }};
+    }
+    let mut enums: std::vec::Vec<(&'static str, std::boxed::Box<dyn Fn(u32) -> bool>)> =
+        std::vec::Vec::new();
+    enums.push(add_enum!(PulseError));
+    enums.push(add_enum!(PulseErrorAuth));
+    enums.push(add_enum!(PulseErrorState));
+    enums.push(add_enum!(PulseErrorValidation));
+    enums.push(add_enum!(PulseErrorLimits));
+    enums.push(add_enum!(PulseErrorTimeLock));
+    enums.push(add_enum!(PulseErrorPayments));
+    enums.push(add_enum!(PulseErrorUpgrade));
+    enums.push(add_enum!(PulseErrorStorage));
+    enums.push(add_enum!(PulseErrorEvents));
+    enums.push(add_enum!(PulseErrorMultisig));
+    enums.push(add_enum!(PulseErrorCrossContract));
+    enums.push(add_enum!(PulseErrorGas));
+    enums.push(add_enum!(PulseErrorNativeRail));
+    enums.push(add_enum!(PulseErrorBatch));
+    enums.push(add_enum!(PulseErrorPauseKill));
+    enums.push(add_enum!(PulseErrorAddressLimits));
+    enums.push(add_enum!(PulseErrorCounter));
+    enums.push(add_enum!(PulseErrorOwnership));
+    enums.push(add_enum!(PulseErrorDeployment));
+    enums.push(add_enum!(PulseErrorEventIntegrity));
+    enums.push(add_enum!(PulseErrorTip));
+    enums.push(add_enum!(PulseErrorWithdraw));
+    enums.push(add_enum!(PulseErrorBalanceAllowance));
+    enums.push(add_enum!(PulseErrorTokenMeta));
+    enums.push(add_enum!(PulseErrorXlmRail));
+    enums.push(add_enum!(PulseErrorBatchTip));
+    enums.push(add_enum!(PulseErrorBroadcast));
+    enums.push(add_enum!(PulseErrorConfig));
+    enums.push(add_enum!(PulseErrorSystem));
+
+    // Count unique codes across all enums and detect overlaps.
+    let mut seen: std::collections::HashMap<u32, &'static str> = std::collections::HashMap::new();
+    for (name, probe) in enums.iter() {
+        for code in 1u32..=3000u32 {
+            if probe(code) {
+                if let Some(prev) = seen.insert(code, name) {
+                    panic!(
+                        "error code {code} is owned by both {prev} and {name}; codes must be unique"
+                    );
+                }
+            }
+        }
+    }
+
+    let total = seen.len();
+    assert!(
+        total >= 300,
+        "taxonomy must define at least 300 error codes, found {total}"
+    );
+
+    // Every legacy code 1-10 must remain in the main enum (backward compat).
+    for code in 1u32..=10u32 {
+        assert!(
+            seen.contains_key(&code),
+            "legacy code {code} must remain part of the taxonomy"
+        );
+    }
+
+    // Spot-check a few documented codes map to the right class.
+    assert_eq!(seen.get(&100), Some(&"PulseError"));
+    assert_eq!(seen.get(&104), Some(&"PulseErrorAuth"));
+    assert_eq!(seen.get(&601), Some(&"PulseError"));
+    assert_eq!(seen.get(&602), Some(&"PulseErrorPayments"));
+    assert_eq!(seen.get(&2910), Some(&"PulseErrorSystem"));
+}
+
+#[test]
+fn test_error_code_round_trip_through_contract_error() {
+    use soroban_sdk::Error;
+
+    // Errors returned by the contract surface as ScError::Contract with the
+    // exact numeric code; converting back must yield the same variant.
+    let mut cases: std::vec::Vec<(PulseError, u32)> = std::vec::Vec::new();
+    cases.push((PulseError::NotAuthorized, 1));
+    cases.push((PulseError::InvalidCaller, 3));
+    cases.push((PulseError::CooldownActive, 8));
+    cases.push((PulseError::PulseCapReached, 9));
+    cases.push((PulseError::EmergencyCommitteeNotConfigured, 103));
+    cases.push((PulseError::InvalidThreshold, 300));
+    cases.push((PulseError::BatchEmpty, 400));
+    cases.push((PulseError::InsufficientBalance, 601));
+    cases.push((PulseError::VersionNotMonotonic, 700));
+
+    for (variant, code) in cases {
+        let err = Error::from(variant);
+        assert_eq!(
+            err.get_code(),
+            code,
+            "{variant:?} must serialize to code {code}"
+        );
+        let back = PulseError::try_from(err).unwrap();
+        assert_eq!(back, variant, "code {code} must round-trip to {variant:?}");
+    }
 }
 
 /// ── Property tests (issue #88) ─────────────────────────────────────────
@@ -1376,6 +1510,514 @@ proptest! {
 }
 
 // ──────────────────────────────────────────────
+// Stellar Payment Rails (tips, withdrawals)
+// ──────────────────────────────────────────────
+
+/// Deploy a SEP-41 asset (SAC) funded with `mint_amount` to `payer`.
+fn funded_sac(env: &Env, payer: &Address, mint_amount: i128) -> Address {
+    let sac = env.register_stellar_asset_contract_v2(payer.clone());
+    let sac_addr = sac.address();
+    env.mock_all_auths();
+    StellarAssetClient::new(env, &sac_addr).mint(payer, &mint_amount);
+    sac_addr
+}
+
+/// The well-known native XLM SAC address the contract defaults to.
+fn native_sac_address(env: &Env) -> Address {
+    Address::from_string(&soroban_sdk::String::from_str(
+        env,
+        NATIVE_ASSET_CONTRACT_ID,
+    ))
+}
+
+/// Point the contract's XLM rails at `token` (a locally registered SAC). The
+/// SDK 21 test host cannot host a SAC at the production native address (asset
+/// contract IDs embed the network ID), so tests re-point the rails to exercise
+/// the full `tip_xlm`/`withdraw_xlm`/`get_xlm_balance` paths.
+fn point_xlm_rails_at(env: &Env, client: &PulseContractClient, token: &Address) {
+    env.mock_all_auths();
+    client.set_native_token_address(token);
+}
+
+#[test]
+fn test_tip_token_transfers_and_pulses() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let (count, paid) = client.tip_token(
+        &token,
+        &payer,
+        &recipient,
+        &250i128,
+        &symbol_short!("alice"),
+    );
+
+    assert_eq!(count, 1u32, "tip must fire exactly one pulse");
+    assert_eq!(paid, 250i128);
+    assert_eq!(client.get_pulse_count(), 1);
+    assert_eq!(TokenClient::new(&env, &token).balance(&payer), 750i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 250i128);
+}
+
+#[test]
+fn test_tip_token_rejects_nonpositive_amount() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let result = client.try_tip_token(&token, &payer, &recipient, &0i128, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidAmount));
+}
+
+#[test]
+fn test_tip_token_rejects_insufficient_balance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 100);
+    let result = client.try_tip_token(
+        &token,
+        &payer,
+        &recipient,
+        &250i128,
+        &symbol_short!("alice"),
+    );
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InsufficientBalance));
+    // No state changed on failure.
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_tip_token_rejects_empty_caller() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let result = client.try_tip_token(&token, &payer, &recipient, &10i128, &Symbol::new(&env, ""));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidCaller));
+}
+
+#[test]
+fn test_tip_token_paused_rejects() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+    client.pause();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let result = client.try_tip_token(&token, &payer, &recipient, &10i128, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::ContractPaused));
+}
+
+#[test]
+fn test_withdraw_token_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    // No mock_all_auths: the test invoker is not the owner.
+
+    let attacker = fresh_address(&env);
+    let token = fresh_address(&env);
+    let result = client.try_withdraw_token(&token, &attacker, &10i128);
+    assert!(result.is_err(), "non-owner must not withdraw funds");
+}
+
+#[test]
+fn test_withdraw_token_moves_contract_balance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    env.mock_all_auths();
+
+    // Fund the contract itself (e.g. misdirected payments).
+    let token = funded_sac(&env, &payer, 1_000);
+    TokenClient::new(&env, &token).transfer(&payer, &id, &400i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&id), 400i128);
+
+    let withdrawn = client.withdraw_token(&token, &recipient, &400i128);
+    assert_eq!(withdrawn, 400i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&id), 0i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 400i128);
+}
+
+#[test]
+fn test_get_token_balance_read_only() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 500);
+    assert_eq!(client.get_token_balance(&token, &payer), 500i128);
+    assert_eq!(client.get_token_balance(&token, &owner), 0i128);
+}
+
+#[test]
+fn test_native_token_address_defaults_to_well_known_constant() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    // The default XLM rail must be the well-known native SAC constant, which
+    // validates the on-chain hardcode parses as a valid contract address.
+    assert_eq!(client.get_native_token_address(), native_sac_address(&env));
+}
+
+#[test]
+fn test_set_native_token_address_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let token = fresh_address(&env);
+    let result = client.try_set_native_token_address(&token);
+    assert!(result.is_err(), "non-owner must not re-point the XLM rails");
+}
+
+#[test]
+fn test_set_native_token_address_emits_config_event() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = fresh_address(&env);
+    client.set_native_token_address(&token);
+    assert_eq!(client.get_native_token_address(), token);
+
+    let topics = emitted_topic_pairs(&env);
+    assert!(
+        topics.iter().any(|(t0, t1)| {
+            t0 == &symbol_short!("config") && t1 == &Some(symbol_short!("ntv_tok"))
+        }),
+        "set_native_token_address must emit a config/native_tok event, got {topics:?}"
+    );
+}
+
+#[test]
+fn test_tip_xlm_transfers_and_pulses() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let token = funded_sac(&env, &payer, 1_000);
+    point_xlm_rails_at(&env, &client, &token);
+
+    let (count, paid) = client.tip_xlm(&payer, &recipient, &150i128, &symbol_short!("alice"));
+    assert_eq!(count, 1u32, "tip must fire exactly one pulse");
+    assert_eq!(paid, 150i128);
+    assert_eq!(client.get_pulse_count(), 1);
+    assert_eq!(TokenClient::new(&env, &token).balance(&payer), 850i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 150i128);
+}
+
+#[test]
+fn test_tip_xlm_rejects_insufficient_balance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let token = funded_sac(&env, &payer, 100);
+    point_xlm_rails_at(&env, &client, &token);
+
+    let result = client.try_tip_xlm(&payer, &recipient, &250i128, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InsufficientBalance));
+    assert_eq!(client.get_pulse_count(), 0, "rejected tip must not pulse");
+}
+
+#[test]
+fn test_withdraw_xlm_requires_owner() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    let recipient = fresh_address(&env);
+
+    let token = funded_sac(&env, &owner, 1_000);
+    point_xlm_rails_at(&env, &client, &token);
+
+    // Non-owner cannot withdraw funds held by the contract.
+    let result = client.try_withdraw_xlm(&recipient, &300i128);
+    assert!(result.is_err(), "non-owner must not withdraw XLM");
+}
+
+#[test]
+fn test_withdraw_xlm_moves_contract_balance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+
+    let token = funded_sac(&env, &payer, 1_000);
+    point_xlm_rails_at(&env, &client, &token);
+
+    // Fund the contract itself (e.g. misdirected payments).
+    TokenClient::new(&env, &token).transfer(&payer, &id, &400i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&id), 400i128);
+
+    let withdrawn = client.withdraw_xlm(&recipient, &400i128);
+    assert_eq!(withdrawn, 400i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&id), 0i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 400i128);
+}
+
+#[test]
+fn test_get_xlm_balance_read_only() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let token = funded_sac(&env, &payer, 777);
+    point_xlm_rails_at(&env, &client, &token);
+
+    assert_eq!(client.get_xlm_balance(&payer), 777i128);
+    assert_eq!(client.get_xlm_balance(&owner), 0i128);
+}
+
+// ──────────────────────────────────────────────
+// Additional Stellar payment rails
+// ──────────────────────────────────────────────
+
+#[test]
+fn test_batch_tip_token_distributes_to_all_recipients() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let r1 = fresh_address(&env);
+    let r2 = fresh_address(&env);
+    let r3 = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let recipients = Vec::from_array(
+        &env,
+        [
+            (r1.clone(), 100i128),
+            (r2.clone(), 250i128),
+            (r3.clone(), 150i128),
+        ],
+    );
+
+    let (count, total) =
+        client.batch_tip_token(&token, &payer, &recipients, &symbol_short!("alice"));
+    assert_eq!(count, 1u32, "a batch tip fires exactly one pulse");
+    assert_eq!(total, 500i128);
+    assert_eq!(client.get_pulse_count(), 1);
+
+    let tc = TokenClient::new(&env, &token);
+    assert_eq!(tc.balance(&payer), 500i128);
+    assert_eq!(tc.balance(&r1), 100i128);
+    assert_eq!(tc.balance(&r2), 250i128);
+    assert_eq!(tc.balance(&r3), 150i128);
+}
+
+#[test]
+fn test_batch_tip_token_rejects_empty_recipients() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let empty: Vec<(Address, i128)> = Vec::new(&env);
+    let result = client.try_batch_tip_token(&token, &payer, &empty, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::RecipientsEmpty));
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_batch_tip_token_rejects_too_many_recipients() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 100_000);
+    let mut recipients = Vec::new(&env);
+    for i in 0..51u32 {
+        let addr = fresh_address(&env);
+        recipients.push_back((addr, i as i128 + 1));
+    }
+
+    let result = client.try_batch_tip_token(&token, &payer, &recipients, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::BatchTooLarge));
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_batch_tip_token_rejects_nonpositive_amount() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    let recipients = Vec::from_array(&env, [(recipient.clone(), 0i128)]);
+    let result = client.try_batch_tip_token(&token, &payer, &recipients, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InvalidAmount));
+    // Nothing moved and no pulse fired.
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 0i128);
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_batch_tip_token_rejects_insufficient_balance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let r1 = fresh_address(&env);
+    let r2 = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 100);
+    let recipients = Vec::from_array(&env, [(r1.clone(), 60i128), (r2.clone(), 60i128)]);
+    let result = client.try_batch_tip_token(&token, &payer, &recipients, &symbol_short!("alice"));
+    assert_eq!(result.unwrap_err(), Ok(PulseError::InsufficientBalance));
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_batch_tip_xlm_uses_native_rail() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let r1 = fresh_address(&env);
+    let r2 = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+
+    let token = funded_sac(&env, &payer, 1_000);
+    point_xlm_rails_at(&env, &client, &token);
+
+    let recipients = Vec::from_array(&env, [(r1.clone(), 200i128), (r2.clone(), 300i128)]);
+    let (count, total) = client.batch_tip_xlm(&payer, &recipients, &symbol_short!("alice"));
+    assert_eq!(count, 1u32);
+    assert_eq!(total, 500i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&r1), 200i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&r2), 300i128);
+}
+
+#[test]
+fn test_tip_token_from_pulls_approved_allowance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    // The payer approves the contract as spender (SEP-41 allowance rail).
+    TokenClient::new(&env, &token).approve(&payer, &id, &500i128, &6_000_000u32);
+
+    let (count, paid) = client.tip_token_from(
+        &token,
+        &payer,
+        &recipient,
+        &250i128,
+        &symbol_short!("alice"),
+    );
+    assert_eq!(count, 1u32);
+    assert_eq!(paid, 250i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&payer), 750i128);
+    assert_eq!(TokenClient::new(&env, &token).balance(&recipient), 250i128);
+}
+
+#[test]
+fn test_tip_token_from_rejects_without_allowance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    // No approve() was called: the contract has no allowance to pull from.
+    let result = client.try_tip_token_from(
+        &token,
+        &payer,
+        &recipient,
+        &250i128,
+        &symbol_short!("alice"),
+    );
+    assert_eq!(result.unwrap_err(), Ok(PulseError::NoAllowance));
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_tip_token_from_rejects_insufficient_allowance() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let recipient = fresh_address(&env);
+    let (id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 1_000);
+    TokenClient::new(&env, &token).approve(&payer, &id, &100i128, &6_000_000u32);
+
+    let result = client.try_tip_token_from(
+        &token,
+        &payer,
+        &recipient,
+        &250i128,
+        &symbol_short!("alice"),
+    );
+    assert_eq!(result.unwrap_err(), Ok(PulseError::NoAllowance));
+    assert_eq!(client.get_pulse_count(), 0);
+}
+
+#[test]
+fn test_get_token_metadata_reads_sep41_fields() {
+    let env = Env::default();
+    let owner = make_owner(&env);
+    let payer = fresh_address(&env);
+    let (_id, client) = deploy_initialized(&env, &owner);
+    env.mock_all_auths();
+
+    let token = funded_sac(&env, &payer, 100);
+    let (name, symbol, decimals) = client.get_token_metadata(&token);
+    // The SDK test SAC uses fixed metadata for registered assets.
+    assert!(!name.is_empty());
+    assert!(!symbol.is_empty());
+    assert!(decimals > 0);
+}
+
+// ──────────────────────────────────────────────
 // Per-Address Rate Limits (issue #59)
 // ──────────────────────────────────────────────
 
@@ -1402,7 +2044,10 @@ fn test_set_default_rate_limit_requires_owner() {
 
     // No mock_all_auths: only the owner may configure limits.
     let result = client.try_set_default_rate_limit(&60u64);
-    assert!(result.is_err(), "non-owner must not set the default rate limit");
+    assert!(
+        result.is_err(),
+        "non-owner must not set the default rate limit"
+    );
 }
 
 #[test]

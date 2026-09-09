@@ -1,0 +1,26 @@
+# Issue & PR hygiene for a high-volume open-source project.
+# Marks stale after 60 days of inactivity, closes after another 14.
+# Only ever touches issues with the `needs-triage` or `awaiting-response`
+# labels, so maintainer-pinned or actively-labeled work is never auto-closed.
+
+daysUntilStale: 60
+daysUntilClose: 14
+exemptLabels:
+  - pinned
+  - security
+  - good first issue
+  - help wanted
+  - epic
+  - do-not-close
+onlyLabels:
+  - needs-triage
+  - awaiting-response
+staleLabel: stale
+markComment: >
+  This issue has been automatically marked as stale because it has not had
+  recent activity. It will be closed if no further activity occurs within 14
+  days. Thank you for your contribution — if this is still relevant, leave a
+  comment or add the `do-not-close` label to keep it open.
+closeComment: >
+  This issue was automatically closed due to inactivity. Feel free to reopen
+  it if the work is still needed.

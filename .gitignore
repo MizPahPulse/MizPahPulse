@@ -64,6 +64,8 @@ playwright-report/
 # Playwright
 /home/codespace/.cache/
 contracts/pulse/test_snapshots/
+contracts/test_snapshots/
+contracts/*.profraw
 
 # Build output for packages
 packages/*/dist/

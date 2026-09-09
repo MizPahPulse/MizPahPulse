@@ -9,7 +9,11 @@
   <a href="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml"><img src="https://github.com/MizPahPulse/MizPahPulse/actions/workflows/ci.yml/badge.svg" alt="CI/CD" /></a>
   <a href="https://mizpah-pulse.vercel.app"><img src="https://img.shields.io/badge/demo-live-22c55e?style=flat&logo=vercel" alt="Live Demo" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="#tests"><img src="https://img.shields.io/badge/tests-55%2F55%20passed-brightgreen" alt="Tests: 55/55" /></a>
+  <a href="#tests"><img src="https://img.shields.io/badge/tests-525%2F525%20passed-brightgreen" alt="Tests: 525/525" /></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/coverage-84-99%25%20(CI%20enforced)-22c55e" alt="Coverage: 84-99% (CI-enforced)" /></a>
+  <a href="contracts/README.md#gas-benchmark"><img src="https://img.shields.io/badge/gas-optimized-22c55e" alt="Gas optimized" /></a>
+  <img src="https://img.shields.io/badge/wasm-64%20KB-7B5BDB?logo=stellar" alt="WASM: 64 KB" />
+  <a href="contracts/README.md"><img src="https://img.shields.io/badge/error%20codes-365-7B5BDB" alt="Error codes: 365" /></a>
   <img src="https://img.shields.io/badge/next.js-15-black?logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/stellar-testnet-7B5BDB?logo=stellar" alt="Stellar Testnet" />
   <img src="https://img.shields.io/badge/soroban-deployed-7B5BDB?logo=stellar" alt="Soroban Deployed" />
@@ -220,6 +224,15 @@ MizpahPulse ships with a **Soroban smart contract** (`PulseContract`) demonstrat
 | `get_pulse_count` | `() → u32` | Read current count |
 | `get_pulse_data` | `() → PulseData` | Read full state |
 | `get_last_received` | `() → Option<(u32, Symbol)>` | Last cross-contract receipt |
+| `tip_token` / `tip_xlm` | `(token, from, to, amt, caller)` | Pay any SEP-41 asset / native XLM + pulse |
+| `tip_token_from` | `(token, from, to, amt, caller)` | Allowance-based pull payment (`transfer_from`) |
+| `batch_tip_token` / `batch_tip_xlm` | `(token, from, [(to, amt)], caller)` | Payroll: N recipients, one pulse |
+| `withdraw_token` / `withdraw_xlm` | `(token, to, amt)` | Owner-only drain of contract-held funds |
+
+> **Audited & measured:** see [`contracts/AUDIT.md`](./contracts/AUDIT.md) for the
+> formal audit report (invariants, findings, threat model) and
+> [`contracts/ERRORS.md`](./contracts/ERRORS.md) for the 365-code error
+> taxonomy.
 
 ### Deployment
 
@@ -229,6 +242,14 @@ MizpahPulse ships with a **Soroban smart contract** (`PulseContract`) demonstrat
 | **Contract ID** | `CC4HXCVIOPUOS2UJFLTM6WP2ESNSWM4BGJ26XR4SRRVB74TOZMC7EE2C` |
 | **Create Tx** | [`ee73ae2e...`](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06) |
 | **Verified** | [View on Stellar Expert →](https://stellar.expert/explorer/testnet/tx/ee73ae2e3126d52878ff010346f8d4645383e606217a7bf3a1c16d2df40ecf06) |
+
+> ⚠️ **Deployment status:** the on-chain instance above predates the payment
+> rails, error taxonomy, and native-rail configuration added in the latest
+> release. Re-deploy to Testnet with `DEPLOYER_SECRET=S... npx tsx
+> scripts/deploy-contract.ts` — the script verifies that the on-chain
+> `WASM_HASH` matches the local artifact before reporting success — then run
+> `initialize --owner <pubkey>` on the fresh contract and point
+> `NEXT_PUBLIC_PULSE_CONTRACT_ID` at it.
 
 ```bash
 # Deploy your own instance
@@ -344,24 +365,43 @@ MizpahPulse tracks **35+ event types** across 6 categories:
 ## 🧪 Testing
 
 ```bash
-# Frontend tests (28 passing)
-cd apps/web && npx vitest run
+# Web suite (hooks, utilities, API logic, components)
+cd apps/web && npx vitest run --coverage   # 399 tests, 55 files
 
-# Smart contract tests (27 passing)
-cd contracts && cargo test
+# Other workspaces (Node test runner) — ws 6, ingester 16, database 1
+(cd apps/ws && npx tsx --test src/*.test.ts)
+(cd apps/ingester && npx tsx --test src/*.test.ts)
+(cd packages/database && npx tsx --test src/*.test.ts)  # needs Postgres
+
+# Smart contract tests (unit + proptest + gas-regression guards + benchmark)
+cd contracts && cargo test                # 104 tests
 ```
 
 ### Test Suite
 
 ```
-✓ PulseContract tests        27 passed  (ownership, pausability, rate limit, batch ops, upgrade, time-lock…)
-✓ useFreighter tests          6 passed  (connect, disconnect, error states)
-✓ useSendTransaction tests    3 passed  (validation, wallet not connected)
-✓ contract invoke tests       3 passed  (validation, contract ID, initial state)
-✓ utility unit tests         16 passed  (date, number, validators, display, error handling)
+✓ Web suite                  399 passed  (hooks, lib utilities, API logic, components)
+✓ WebSocket server            6 passed
+✓ Ingester                   16 passed
+✓ PulseContract tests       104 passed  (ownership, pausability, multi-sig, rate limits,
+                                          per-address limits, cap, time-lock, upgrade, kill,
+                                          payments, batch tips, allowance tips, property tests,
+                                          365-code taxonomy, gas-regression guards, benchmark)
+✓ Database                     1 passed  (runs in CI with Postgres; skips locally without it)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Total: 55/55 passing
+  Total: 526/526 passing (525 passing without Postgres)
 ```
+
+**Coverage** is enforced in CI:
+
+| Layer | Measured | CI floor |
+|---|---|---|
+| Contract (`src/lib.rs`) | 98.69% lines / 93.75% functions (`llvm-cov`) | ≥ 90% lines |
+| Web logic (`apps/web/src/lib/**`) | 83.86% lines / 88.97% branches (vitest v8) | ≥ 65% lines / ≥ 80% branches |
+
+Every contract operation additionally carries host-budget gas guards. See
+[`contracts/AUDIT.md`](./contracts/AUDIT.md) for the formal audit report and
+[`contracts/README.md`](./contracts/README.md) for the gas benchmark.
 
 ---
 

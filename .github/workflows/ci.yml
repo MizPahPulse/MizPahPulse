@@ -147,6 +147,27 @@ jobs:
       - name: Run contract tests
         run: cd contracts && cargo test
 
+      - name: Enforce contract coverage floor (llvm-cov)
+        # Instruments the contract lib with the toolchain's llvm-tools and
+        # fails the job when line coverage of src/lib.rs drops below 90%.
+        run: |
+          rustup component add llvm-tools-preview
+          cd contracts
+          export RUSTFLAGS="-C instrument-coverage"
+          cargo test --no-run --quiet
+          BIN=$(ls -t target/debug/deps/pulse_contract-* | grep -v '\.d$' | head -1)
+          LLVM_PROFILE_FILE=target/cov-%p-%m.profraw "$BIN" --test-threads=1 > /dev/null 2>&1
+          LLVM_TOOLS=$(dirname "$(find ~/.rustup/toolchains -name llvm-profdata | head -1)")
+          "$LLVM_TOOLS/llvm-profdata" merge -sparse target/cov-*.profraw -o target/cov.profdata
+          "$LLVM_TOOLS/llvm-cov" export "$BIN" -instr-profile=target/cov.profdata \
+            --ignore-filename-regex='/.cargo/|/rustc/|soroban-sdk|/target/|test\.rs|benchmark\.rs' \
+            > target/cov.json
+          node -e "
+            const t = require('./target/cov.json').data[0].totals.lines.percent;
+            console.log('Contract line coverage: ' + t.toFixed(2) + '%');
+            if (t < 90) { console.error('Coverage below the 90% floor'); process.exit(1); }
+          "
+
       - name: Build contract WASM
         run: cd contracts && cargo build --target wasm32-unknown-unknown --release
 
