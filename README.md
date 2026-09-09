@@ -455,8 +455,13 @@ Every contract operation additionally carries host-budget gas guards. See
 | **Contract** | Push, PR | Cargo test + WASM build + artifact upload |
 | **E2E (Playwright)** | Push, PR | Full browser flow against the built app (mock mode) |
 | **Lighthouse** | Push, PR | Performance, accessibility, SEO audits |
+| **Dependency Audit** | Push, PR, weekly | `npm audit` critical gate + `cargo audit` |
+| **CodeQL** | Push, PR, weekly | GitHub code scanning (JS/TS) |
+| **Secret Scan** | Push, PR, weekly | TruffleHog — leaked secrets detection |
 | **Deploy Contract** | Manual (`workflow_dispatch`) | Deploy WASM to Stellar Testnet |
 | **Docker** | Push to `main` | Multi-service Docker build |
+
+The full suite also runs as a **weekly regression** (Mondays) via a scheduled trigger on `ci.yml`.
 
 ---
 
