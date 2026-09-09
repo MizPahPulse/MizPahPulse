@@ -3,13 +3,17 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy root workspace config
-COPY package.json turbo.json tsconfig.base.json ./
+# Copy root workspace config. package-lock.json is required for `npm ci`
+# — without it npm ci fails with EUSAGE and the image cannot be built.
+COPY package.json package-lock.json turbo.json tsconfig.base.json ./
 COPY .prettierrc .prettierignore ./
 
 # Copy all packages and apps
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
+
+# HUSKY=0 skips installing Git hooks (there is no .git inside the image).
+ENV HUSKY=0
 
 # Install dependencies
 RUN npm ci
@@ -27,6 +31,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HUSKY=0
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
