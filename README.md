@@ -11,6 +11,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="#testing"><img src="https://img.shields.io/badge/tests-526%2F526%20passed-brightgreen" alt="Tests: 526/526" /></a>
   <a href="#testing"><img src="https://img.shields.io/badge/coverage-83.9%25%20%2F%2098.7%25%20lines%20(CI%20enforced)-22c55e" alt="Coverage: 83.9% / 98.7% lines (CI-enforced)" /></a>
+  <a href="https://www.loom.com/share/a5f018a9ae8e4de1994c20ee53d94ce6"><img src="https://img.shields.io/badge/pitch%20video-5%20min%20%E2%96%B6-22c55e?logo=loom&logoColor=white" alt="Pitch Video (Loom)" /></a>
   <img src="https://img.shields.io/badge/realtime-WebSocket%20%2B%20SSE-0ea5e9" alt="Realtime: WebSocket + SSE" />
   <img src="https://img.shields.io/badge/webhooks-HMAC%20signed-0ea5e9" alt="Webhooks: HMAC signed" />
   <a href="contracts/README.md#gas-benchmark"><img src="https://img.shields.io/badge/gas-optimized-22c55e" alt="Gas optimized" /></a>
@@ -130,6 +131,12 @@
     <source src="./screenshots/demo-video.mp4" type="video/mp4" />
     Your browser doesn't support embedded video — <a href="./screenshots/demo-video.mp4">download the MP4</a>.
   </video>
+  <br/>
+  <sub>
+    ▶️ <a href="https://www.loom.com/share/a5f018a9ae8e4de1994c20ee53d94ce6"><b>Watch the pitch on Loom</b></a>
+    (streaming · no download needed) ·
+    <a href="./screenshots/demo-video.mp4">Download the MP4</a>
+  </sub>
 </p>
 
 ---
