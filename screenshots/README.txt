@@ -18,4 +18,8 @@ wallet connect flow resolve with a real funded Testnet account):
 
   BASE_URL=https://mizpah-pulse.vercel.app node scripts/capture-screenshots.mjs
 
-Demo video: demo-video.mp4 — 2-minute walkthrough of the entire platform.
+Pitch video: demo-video.mp4 — 5-minute narrated product pitch (1080p,
+problem → solution → live demo → engineering → CTA). Poster frame:
+pitch-video-poster.png. Rebuild with scripts/build-pitch-video.py
+(edge-tts narration + Playwright slides + ffmpeg; see scripts/pitch-script.md
+for the narration script).

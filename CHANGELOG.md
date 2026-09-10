@@ -30,9 +30,16 @@
 - README rewritten as a pitch-first document — new 60-second pitch
   (problem → solution → proof → audience), updated badges (526/526 tests,
   83.9% web / 98.7% contract coverage, realtime, webhooks), a
-  Documentation section linking `docs/webhooks.md` and `docs/adr/`, and all
-  8 screenshots re-captured against the live deploy via the new
+  Documentation section linking `docs/webhooks.md` and `docs/adr/`, and  all 8 screenshots re-captured against the live deploy via the new
   `scripts/capture-screenshots.mjs` (Playwright, 1440×900 / 375×812).
+- **5-minute pitch video** — `screenshots/demo-video.mp4` rebuilt as a
+  narrated product pitch (1080p, ~5:17): problem → solution → live-deploy
+  walkthrough → engineering story → differentiators → CTA, with Ken Burns
+  motion, crossfades, callouts, and a natural neural voice-over
+  (edge-tts). Poster frame `screenshots/pitch-video-poster.png`;
+  reproducible via `scripts/build-pitch-video.py` + `scripts/pitch-script.md`.
+  README now embeds the video (poster thumbnail near the top + inline
+  `<video>` player in the Live Demo section).
 
 ## v0.2.0 - Major Enhancement Release
 
