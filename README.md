@@ -28,7 +28,14 @@
   <a href="#-architecture"><b>Architecture</b></a> ·
   <a href="#-api-reference"><b>API Reference</b></a> ·
   <a href="#-smart-contract"><b>Smart Contract</b></a> ·
-  <a href="./screenshots/demo-video.mp4"><b>▶️ Demo Video</b></a>
+  <a href="#-live-demo"><b>▶️ Pitch Video</b></a>
+</p>
+
+<p align="center">
+  <a href="./screenshots/demo-video.mp4">
+    <img src="./screenshots/pitch-video-poster.png" alt="MizpahPulse — 5-Minute Pitch Video" width="560" />
+  </a>
+  <br/>  <sub><b>▶️ Watch the 5-minute pitch</b> — problem → solution → live demo → engineering → CTA (with narration)</sub>
 </p>
 
 ---
@@ -116,7 +123,14 @@
   </a>
 </p>
 
-**[▶️ Watch the 2-minute demo video](./screenshots/demo-video.mp4)** — A guided walkthrough of the entire platform.
+**[▶️ Watch the 5-minute pitch video](./screenshots/demo-video.mp4)** — A narrated product pitch: the problem, the solution, a live walkthrough of the production deployment, the engineering story, and why it's different. (MP4 · 5:17 · 1080p — right-click → *Save as* to download.)
+
+<p align="center">
+  <video controls width="90%" poster="./screenshots/pitch-video-poster.png">
+    <source src="./screenshots/demo-video.mp4" type="video/mp4" />
+    Your browser doesn't support embedded video — <a href="./screenshots/demo-video.mp4">download the MP4</a>.
+  </video>
+</p>
 
 ---
 
